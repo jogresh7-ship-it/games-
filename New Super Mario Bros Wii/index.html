@@ -28,7 +28,7 @@ addEventListener("resize", fit); fit();
 
 // ---------- images ----------
 const I = {};
-for (const n of ["tiles_std", "tiles_grass", "bg0", "bg1", "bg2", "bg3", "mario", "luigi", "coin_icon", "starcoin", ...[...Array(10)].map((_, i) => "n" + i)]) {
+for (const n of ["tiles_std", "tiles_grass", "bg0", "bg1", "bg2", "bg3", "mario", "luigi", "toad_blue", "toad_yellow", "logo", "coin_icon", "starcoin", ...[...Array(10)].map((_, i) => "n" + i)]) {
   I[n] = new Image(); I[n].src = "assets/" + n + ".png";
 }
 const ok = (im) => im.complete && im.naturalWidth;
@@ -106,6 +106,13 @@ function makeLevel(n) {
   const goalX = x + 16;
   return { W, g, ents, goalX, name: "1-" + n };
 }
+const CHARS = [
+  { id: "mario", name: "MARIO", color: "#ff6b6b", jump: 0, speed: 1 },
+  { id: "luigi", name: "LUIGI", color: "#6bff8b", jump: 0.9, speed: 1 },
+  { id: "toad_blue", name: "BLUE TOAD", color: "#6bb8ff", jump: 0.3, speed: 1.08 },
+  { id: "toad_yellow", name: "YELLOW TOAD", color: "#ffe14a", jump: 0.3, speed: 1.08 },
+];
+const charInfo = () => CHARS.find((c) => c.id === G.char) || CHARS[0];
 const solidCh = (c) => c === "#" || c === "B" || c === "?" || c === "M" || c === "=" || c === "S" || c === "P" || c === "p";
 
 // expand pipes into tiles reaching the ground
@@ -162,15 +169,14 @@ function movePlayer() {
   if (p.clear) {
     p.vx = p.x < L.goalX * T + 70 ? 1.5 : 0; p.face = 1;
   } else {
-    const run = K.g, max = run ? 4.2 : 2.6, acc = p.ground ? 0.14 : 0.1;
+    const run = K.g, max = (run ? 4.2 : 2.6) * charInfo().speed, acc = p.ground ? 0.14 : 0.1;
     if (K.l) { p.vx = Math.max(-max, p.vx - acc * (p.vx > 0 ? 2 : 1)); p.face = -1; }
     else if (K.r) { p.vx = Math.min(max, p.vx + acc * (p.vx < 0 ? 2 : 1)); p.face = 1; }
     else p.vx *= p.ground ? 0.85 : 0.97;
     if (Math.abs(p.vx) < 0.05) p.vx = 0;
     if (Math.abs(p.vx) > max) p.vx *= 0.96;
     if (P1.j && p.ground) {
-      const luigi = G.char === "luigi";
-      p.vy = -(7.4 + Math.abs(p.vx) * 0.35 + (luigi ? 0.9 : 0)); p.ground = false; p.jumpHeld = 18; SND.jump();
+      p.vy = -(7.4 + Math.abs(p.vx) * 0.35 + charInfo().jump); p.ground = false; p.jumpHeld = 18; SND.jump();
     }
   }
   if (K.j && p.jumpHeld > 0 && p.vy < 0) { p.jumpHeld--; p.vy -= G.char === "luigi" ? 0.32 : 0.28; } else p.jumpHeld = 0;
@@ -343,17 +349,21 @@ function drawHUD() {
 // ---------- screens ----------
 function drawTitle() {
   camX = G.t * 0.8; drawBG();
-  text("NEW SUPER", VW / 2, 60, 26, "#ffffff");
-  text("MARIO BROS. Wii", VW / 2, 92, 30, "#ff3b3b");
-  text("FAN PROTOTYPE", VW / 2, 120, 11, "#ffe14a");
-  const m = I.mario, l = I.luigi;
-  const sel = G.char === "mario";
-  if (ok(m)) { ctx.globalAlpha = sel ? 1 : 0.5; ctx.drawImage(m, VW / 2 - 80, 140, 50, 50 * m.height / m.width); }
-  if (ok(l)) { ctx.globalAlpha = sel ? 0.5 : 1; ctx.drawImage(l, VW / 2 + 30, 136, 50, 50 * l.height / l.width); }
-  ctx.globalAlpha = 1;
-  text(sel ? "▲ MARIO" : "LUIGI ▲", sel ? VW / 2 - 55 : VW / 2 + 55, 206, 11, sel ? "#ff6b6b" : "#6bff8b");
-  if (Math.floor(G.t / 30) % 2 === 0) text("PRESS ENTER / TAP TO START", VW / 2, 232, 12);
-  text("◀ ▶ pick player   Arrows: move   Space/Z: jump   Shift/X: run", VW / 2, 258, 9, "#dff");
+  const lg = I.logo;
+  if (ok(lg)) { const w = 300, h = w * lg.height / lg.width; ctx.drawImage(lg, VW / 2 - w / 2, 12, w, h); }
+  text("FAN PROTOTYPE", VW / 2, 142, 10, "#ffe14a");
+  const n = CHARS.length, gap = 74, x0 = VW / 2 - gap * (n - 1) / 2;
+  CHARS.forEach((c, i) => {
+    const im = I[c.id]; if (!ok(im)) return;
+    const sel = c.id === G.char, h = sel ? 52 : 40, w = h * im.width / im.height;
+    ctx.globalAlpha = sel ? 1 : 0.55;
+    ctx.drawImage(im, x0 + i * gap - w / 2, 205 - h + (sel ? Math.sin(G.t / 8) * 2 : 0), w, h);
+    ctx.globalAlpha = 1;
+  });
+  const ci = charInfo();
+  text("◀ " + ci.name + " ▶", VW / 2, 218, 12, ci.color);
+  if (Math.floor(G.t / 30) % 2 === 0) text("PRESS ENTER / TAP TO START", VW / 2, 240, 12);
+  text("Arrows: move   Space/Z: jump   Shift/X: run", VW / 2, 260, 9, "#dff");
 }
 
 // ---------- loop ----------
@@ -361,7 +371,7 @@ function step() {
   G.t++;
   switch (G.mode) {
     case "title":
-      if (P1.l) G.char = "mario"; if (P1.r) G.char = "luigi";
+      if (P1.l || P1.r) { const i = CHARS.findIndex((c) => c.id === G.char); G.char = CHARS[(i + (P1.r ? 1 : CHARS.length - 1)) % CHARS.length].id; SND.coin(); }
       drawTitle();
       if (P1.s || P1.j) { G.lives = 5; G.coins = 0; G.score = 0; G.stars = 0; loadLevel(1); }
       break;
