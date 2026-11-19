@@ -61,13 +61,15 @@ function tone(f, d, type = "square", v = 0.06, slide = 0, delay = 0) {
   o.type = type; o.frequency.setValueAtTime(f, t); if (slide) o.frequency.exponentialRampToValueAtTime(Math.max(30, f + slide), t + d);
   g.gain.setValueAtTime(v, t); g.gain.exponentialRampToValueAtTime(0.0001, t + d); o.connect(g); g.connect(ac.destination); o.start(t); o.stop(t + d + 0.02);
 }
-const SND = {
-  wing() { tone(500, 0.08, "triangle", 0.08, 300); },
-  point() { tone(1046, 0.08, "square", 0.05); tone(1568, 0.16, "square", 0.05, 0, 0.08); },
-  hit() { tone(180, 0.15, "sawtooth", 0.1, -120); },
-  die() { tone(600, 0.45, "triangle", 0.08, -480, 0.15); },
-  swoosh() { tone(300, 0.2, "sine", 0.05, 600); },
-};
+const WAVS = {};
+for (const n of ["wing", "point", "hit", "die", "swooshing"]) { const a = new Audio("assets/sfx/" + n + ".wav"); a.preload = "auto"; WAVS[n] = a; }
+function play(n) {
+  const base = WAVS[n];
+  const a = base.paused || base.ended ? base : base.cloneNode();
+  try { a.currentTime = 0; } catch (e) {}
+  const p = a.play(); if (p && p.catch) p.catch(() => {});
+}
+const SND = { wing: () => play("wing"), point: () => play("point"), hit: () => play("hit"), die: () => play("die"), swoosh: () => play("swooshing") };
 
 // ---------- state ----------
 let best = 0;
