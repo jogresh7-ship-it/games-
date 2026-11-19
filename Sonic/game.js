@@ -7,7 +7,7 @@ const canvas = document.getElementById("screen");
 const ctx = canvas.getContext("2d");
 ctx.imageSmoothingEnabled = false;
 const SKY = "#2300b4";
-const ACTS = ["ghz1", "ghz2"];
+const ACTS = ["ghz1", "ghz2", "ghz3"];
 
 // ---------- scaling ----------
 function fit() {
