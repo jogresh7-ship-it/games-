@@ -1,0 +1,33 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no" />
+  <title>Sonic the Hedgehog (Beta Prototype)</title>
+  <style>
+    html, body { margin: 0; height: 100%; background: #000; overflow: hidden; touch-action: none; user-select: none; -webkit-user-select: none; }
+    body { display: flex; align-items: center; justify-content: center; }
+    canvas { image-rendering: pixelated; image-rendering: crisp-edges; background: #000; }
+    #touch { position: fixed; inset: auto 0 0 0; height: 40%; display: none; pointer-events: none; }
+    body.touch #touch { display: block; }
+    .tbtn { position: absolute; bottom: 18px; width: 74px; height: 74px; border-radius: 50%; background: rgba(255,255,255,.18); border: 2px solid rgba(255,255,255,.45); color: #fff; font: bold 26px sans-serif; display: flex; align-items: center; justify-content: center; pointer-events: auto; }
+    #t-left { left: 16px; } #t-right { left: 104px; } #t-down { left: 60px; bottom: 100px; width: 58px; height: 58px; font-size: 20px; }
+    #t-jump { right: 22px; width: 90px; height: 90px; background: rgba(60,120,255,.35); }
+    #t-pause { right: 22px; top: auto; bottom: auto; position: fixed; top: 10px; width: 44px; height: 44px; font-size: 16px; }
+  </style>
+</head>
+<body>
+  <canvas id="screen" width="400" height="224"></canvas>
+  <div id="touch">
+    <div class="tbtn" id="t-left">◀</div>
+    <div class="tbtn" id="t-right">▶</div>
+    <div class="tbtn" id="t-down">▼</div>
+    <div class="tbtn" id="t-jump">JUMP</div>
+    <div class="tbtn" id="t-pause">II</div>
+  </div>
+  <script src="assets/sprites.js"></script>
+  <script src="assets/levels/ghz1.js"></script>
+  <script src="assets/levels/ghz2.js"></script>
+  <script src="game.js"></script>
+</body>
+</html>
