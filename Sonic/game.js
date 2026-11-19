@@ -193,7 +193,7 @@ function groundBelow(x, y, range = 400) {
 
 // ---------- game state ----------
 const G = {
-  mode: "title", // title | card | play | results | gameover | ending
+  mode: "boot", // boot | sega | title | card | play | results | gameover | ending
   t: 0, act: 0, score: 0, lives: 3, rings: 0, time: 0, nextLifeAt: 100,
   paused: false, camX: 0, camY: 0, objs: [], fx: [], lost: [], shots: [], modeT: 0,
 };
@@ -777,9 +777,26 @@ function step() {
     return;
   }
   switch (G.mode) {
+    case "boot":
+      ctx.fillStyle = "#000"; ctx.fillRect(0, 0, VW, VH);
+      if (Math.floor(G.t / 30) % 2 === 0) text("PRESS ANY KEY", VW / 2, VH / 2, 12);
+      if (pressed.start || pressed.jump || pressed.left || pressed.right || pressed.up || pressed.down) { G.mode = "sega"; G.modeT = 0; }
+      break;
+    case "sega": {
+      G.modeT++;
+      const k = G.modeT;
+      ctx.fillStyle = "#fff"; ctx.fillRect(0, 0, VW, VH);
+      // sweep: frames 0-19, then the logo cycles through its palettes (20-23)
+      const f = k < 40 ? Math.floor(k / 2) : k < 64 ? 20 + Math.floor((k - 40) / 8) : 23;
+      spr("sega" + Math.min(23, f), (VW - 320) / 2, 0);
+      if (k === 64) SFX.sega();
+      if (k > 190) { ctx.fillStyle = `rgba(0,0,0,${Math.min(1, (k - 190) / 20)})`; ctx.fillRect(0, 0, VW, VH); }
+      if (k > 212 || (k > 10 && pressed.start)) { G.mode = "title"; G.modeT = 0; }
+      break;
+    }
     case "title":
       drawTitle();
-      if (pressed.start || pressed.jump) { SFX.sega(); startGame(); }
+      if (pressed.start || pressed.jump) startGame();
       break;
     case "ending":
       drawEnding();
