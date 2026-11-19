@@ -193,7 +193,7 @@ function groundBelow(x, y, range = 400) {
 
 // ---------- game state ----------
 const G = {
-  mode: "title", // title | card | play | results | gameover | ending
+  mode: "boot", // boot | sega | title | card | play | results | gameover | ending
   t: 0, act: 0, score: 0, lives: 3, rings: 0, time: 0, nextLifeAt: 100,
   paused: false, camX: 0, camY: 0, objs: [], fx: [], lost: [], shots: [], modeT: 0,
 };
@@ -233,26 +233,26 @@ const AIR = 0.09375, ROLLFRC = 0.0234375, ROLLDEC = 0.125, MAXFALL = 16, MAXSPD 
 const HW = 9;
 function bodyH() { return P.rolling || P.jumping ? 28 : 38; }
 
-function wallAt(x, y, h) {
-  for (let yy = y - h + 4; yy <= y - 10; yy += 4) if (solidAt(x, yy)) return true;
+function wallAt(x, y, h, low = 10) {
+  for (let yy = y - h + 4; yy <= y - low; yy += 4) if (solidAt(x, yy)) return true;
   return false;
 }
 
 function groundStep(dx) {
   const s = Math.sign(dx);
   const nx = P.x + dx;
-  if (s && wallAt(nx + s * HW, P.y, bodyH())) {
+  if (s && wallAt(nx + s * HW, P.y, bodyH(), 26)) {
     P.gsp = 0; P.pushing = (s === 1 && keys.right) || (s === -1 && keys.left);
     return false;
   }
-  const a = floorNear(nx - 6, P.y, 16, 16), b = floorNear(nx + 6, P.y, 16, 16), c = floorNear(nx, P.y, 16, 16);
+  const a = floorNear(nx - 6, P.y, 28, 20), b = floorNear(nx + 6, P.y, 28, 20), c = floorNear(nx, P.y, 28, 20);
   const cands = [a, b, c].filter((v) => v !== null);
   if (!cands.length) {
     // ran off a ledge
     P.x = nx; P.ground = false; P.vx = P.gsp; P.vy = 0; return false;
   }
   const top = Math.min(...cands);
-  if (P.y - top > 15) { P.gsp = 0; return false; }
+  if (P.y - top > 26) { P.gsp = 0; return false; }
   P.x = nx; P.y = top;
   return true;
 }
@@ -274,7 +274,7 @@ function updatePlayer() {
   if (P.ground) {
     P.skid = false;
     // slope factor
-    const ha = floorNear(P.x - 8, P.y, 16, 16), hb = floorNear(P.x + 8, P.y, 16, 16);
+    const ha = floorNear(P.x - 8, P.y, 28, 20), hb = floorNear(P.x + 8, P.y, 28, 20);
     P.ang = ha !== null && hb !== null ? Math.atan2(hb - ha, 16) : 0;
     const sin = Math.sin(P.ang);
     if (P.rolling) {
@@ -316,7 +316,7 @@ function updatePlayer() {
         if (!groundStep(st)) break;
         rem -= st;
       }
-      if (P.ground && floorNear(P.x, P.y, 16, 16) === null) { P.ground = false; P.vx = P.gsp; P.vy = 0; }
+      if (P.ground && floorNear(P.x, P.y, 28, 20) === null) { P.ground = false; P.vx = P.gsp; P.vy = 0; }
     }
   }
 
@@ -440,8 +440,8 @@ function updateObj(o, pb) {
     }
   } else if (type === "spring") {
     if (o.up > 0) o.up--;
-    const b = box(o, 28, 16);
-    if (!P.dead && hit(pb, b) && (P.ground || P.vy >= 0)) {
+    const b = box(o, 32, 44);   // generous: catches Sonic skimming just above it at speed
+    if (!P.dead && hit(pb, b) && P.vy >= 0) {
       P.vx = P.ground ? P.gsp : P.vx; P.ground = false; P.vy = -(o.pow || 10); P.y = o.y - 16;
       P.jumping = false; P.rolling = false; P.springT = 1; o.up = 12; SFX.spring();
     }
@@ -777,9 +777,26 @@ function step() {
     return;
   }
   switch (G.mode) {
+    case "boot":
+      ctx.fillStyle = "#000"; ctx.fillRect(0, 0, VW, VH);
+      if (Math.floor(G.t / 30) % 2 === 0) text("PRESS ANY KEY", VW / 2, VH / 2, 12);
+      if (pressed.start || pressed.jump || pressed.left || pressed.right || pressed.up || pressed.down) { G.mode = "sega"; G.modeT = 0; }
+      break;
+    case "sega": {
+      G.modeT++;
+      const k = G.modeT;
+      ctx.fillStyle = "#fff"; ctx.fillRect(0, 0, VW, VH);
+      // sweep: frames 0-19, then the logo cycles through its palettes (20-23)
+      const f = k < 40 ? Math.floor(k / 2) : k < 64 ? 20 + Math.floor((k - 40) / 8) : 23;
+      spr("sega" + Math.min(23, f), (VW - 320) / 2, 0);
+      if (k === 64) SFX.sega();
+      if (k > 190) { ctx.fillStyle = `rgba(0,0,0,${Math.min(1, (k - 190) / 20)})`; ctx.fillRect(0, 0, VW, VH); }
+      if (k > 212 || (k > 10 && pressed.start)) { G.mode = "title"; G.modeT = 0; }
+      break;
+    }
     case "title":
       drawTitle();
-      if (pressed.start || pressed.jump) { SFX.sega(); startGame(); }
+      if (pressed.start || pressed.jump) startGame();
       break;
     case "ending":
       drawEnding();
