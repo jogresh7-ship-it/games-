@@ -96,7 +96,7 @@ function noise(dur, vol = 0.12) {
   const s = a.createBufferSource(), g = a.createGain();
   s.buffer = b; g.gain.value = vol; s.connect(g); g.connect(a.destination); s.start();
 }
-const SFX = {
+const SYNTH = {
   ring() { tone(1318, 0.07, "square", 0.06); tone(1976, 0.18, "square", 0.06, 0, 0.06); },
   jump() { tone(300, 0.18, "square", 0.06, 500); },
   spring() { tone(200, 0.3, "square", 0.07, 900); },
@@ -112,6 +112,31 @@ const SFX = {
   brake() { noise(0.12, 0.06); },
   roll() { tone(160, 0.2, "sawtooth", 0.05, 300); },
 };
+// Real Genesis sound effects (plain <audio>, so they work when opened from disk).
+const WAV = {};
+for (const n of ["ring", "jump", "spring", "pop", "lose", "death", "spikedeath", "brake", "roll", "sign", "tally", "shield", "monitor", "bonus", "sega"]) {
+  const a = new Audio("assets/sfx/" + n + ".wav");
+  a.preload = "auto";
+  WAV[n] = a;
+}
+function playWav(n, vol = 0.6) {
+  const base = WAV[n];
+  if (!base) return false;
+  const a = base.paused || base.ended || base.currentTime === 0 ? base : base.cloneNode();
+  a.volume = vol;
+  try { a.currentTime = 0; } catch (e) {}
+  const p = a.play();
+  if (p && p.catch) p.catch(() => {});
+  return true;
+}
+const SFX = new Proxy({}, {
+  get: (_, n) => () => {
+    const alias = { hurt: "lose" }[n] || n;
+    if (n === "hurt" && G.rings === 0) return;     // ring-loss sound plays from scatterRings
+    if (!playWav(alias) && SYNTH[n]) { audio(); SYNTH[n](); }
+  },
+});
+
 
 // ---------- input ----------
 const keys = {};
@@ -357,11 +382,10 @@ function updatePlayer() {
 function hurtPlayer(srcX) {
   if (P.inv > 0 || P.hurt || P.dead) return;
   if (P.shield) {
-    P.shield = false;
+    P.shield = false; SFX.pop();
   } else if (G.rings > 0) {
     scatterRings();
   } else { killPlayer(); return; }
-  SFX.hurt();
   P.hurt = true; P.ground = false; P.rolling = P.jumping = false;
   P.vx = P.x < srcX ? -2 : 2; P.vy = -4; P.inv = 120;
 }
@@ -716,7 +740,7 @@ function updateResults() {
   if (G.modeT > 110 && (T.time > 0 || T.ring > 0)) {
     const a = Math.min(100, T.time), b = Math.min(100, T.ring);
     T.time -= a; T.ring -= b; G.score += a + b;
-    if (G.modeT % 4 === 0) SFX.tally();
+    if (G.modeT % 6 === 0) SFX.tally();
     G.tallyDone = G.modeT;
   } else if (G.modeT > 110 && G.modeT - (G.tallyDone || 110) > 150) {
     if (G.act + 1 < ACTS.length) loadAct(G.act + 1);
@@ -755,7 +779,7 @@ function step() {
   switch (G.mode) {
     case "title":
       drawTitle();
-      if (pressed.start || pressed.jump) startGame();
+      if (pressed.start || pressed.jump) { SFX.sega(); startGame(); }
       break;
     case "ending":
       drawEnding();
