@@ -233,26 +233,26 @@ const AIR = 0.09375, ROLLFRC = 0.0234375, ROLLDEC = 0.125, MAXFALL = 16, MAXSPD 
 const HW = 9;
 function bodyH() { return P.rolling || P.jumping ? 28 : 38; }
 
-function wallAt(x, y, h) {
-  for (let yy = y - h + 4; yy <= y - 10; yy += 4) if (solidAt(x, yy)) return true;
+function wallAt(x, y, h, low = 10) {
+  for (let yy = y - h + 4; yy <= y - low; yy += 4) if (solidAt(x, yy)) return true;
   return false;
 }
 
 function groundStep(dx) {
   const s = Math.sign(dx);
   const nx = P.x + dx;
-  if (s && wallAt(nx + s * HW, P.y, bodyH())) {
+  if (s && wallAt(nx + s * HW, P.y, bodyH(), 26)) {
     P.gsp = 0; P.pushing = (s === 1 && keys.right) || (s === -1 && keys.left);
     return false;
   }
-  const a = floorNear(nx - 6, P.y, 16, 16), b = floorNear(nx + 6, P.y, 16, 16), c = floorNear(nx, P.y, 16, 16);
+  const a = floorNear(nx - 6, P.y, 28, 20), b = floorNear(nx + 6, P.y, 28, 20), c = floorNear(nx, P.y, 28, 20);
   const cands = [a, b, c].filter((v) => v !== null);
   if (!cands.length) {
     // ran off a ledge
     P.x = nx; P.ground = false; P.vx = P.gsp; P.vy = 0; return false;
   }
   const top = Math.min(...cands);
-  if (P.y - top > 15) { P.gsp = 0; return false; }
+  if (P.y - top > 26) { P.gsp = 0; return false; }
   P.x = nx; P.y = top;
   return true;
 }
@@ -274,7 +274,7 @@ function updatePlayer() {
   if (P.ground) {
     P.skid = false;
     // slope factor
-    const ha = floorNear(P.x - 8, P.y, 16, 16), hb = floorNear(P.x + 8, P.y, 16, 16);
+    const ha = floorNear(P.x - 8, P.y, 28, 20), hb = floorNear(P.x + 8, P.y, 28, 20);
     P.ang = ha !== null && hb !== null ? Math.atan2(hb - ha, 16) : 0;
     const sin = Math.sin(P.ang);
     if (P.rolling) {
@@ -316,7 +316,7 @@ function updatePlayer() {
         if (!groundStep(st)) break;
         rem -= st;
       }
-      if (P.ground && floorNear(P.x, P.y, 16, 16) === null) { P.ground = false; P.vx = P.gsp; P.vy = 0; }
+      if (P.ground && floorNear(P.x, P.y, 28, 20) === null) { P.ground = false; P.vx = P.gsp; P.vy = 0; }
     }
   }
 
@@ -440,8 +440,8 @@ function updateObj(o, pb) {
     }
   } else if (type === "spring") {
     if (o.up > 0) o.up--;
-    const b = box(o, 28, 16);
-    if (!P.dead && hit(pb, b) && (P.ground || P.vy >= 0)) {
+    const b = box(o, 32, 44);   // generous: catches Sonic skimming just above it at speed
+    if (!P.dead && hit(pb, b) && P.vy >= 0) {
       P.vx = P.ground ? P.gsp : P.vx; P.ground = false; P.vy = -(o.pow || 10); P.y = o.y - 16;
       P.jumping = false; P.rolling = false; P.springT = 1; o.up = 12; SFX.spring();
     }
