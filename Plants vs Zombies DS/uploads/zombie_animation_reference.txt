@@ -1,0 +1,518 @@
+ZOMBIE HEAD-POP, HEADLESS WALK, AND COLLAPSE SYSTEM
+Source: revision 101, game.js and style.css
+
+This is the animation/death behavior used by this revision, collected for reference/porting. Runtime files are not changed by this text file.
+
+BEHAVIOR
+- Zombie HP reaching zero calls zStartHeadless(). The head becomes a separate physics-driven debris sprite.
+- The zombie switches to the cropped basicdeadwalk1-7.png frames, or basicdeadeat1-5.png if it was chewing. Its image is rendered shorter than the standing sprite so the cropped sprite retains the intended on-screen body size.
+- Headless zombies keep walking/eating for ZHEADLESS_DURATION (3.5s); headless walkers continue moving, headless eaters stop chewing plants.
+- Then zStartFall() plays the one-shot nine-frame basicfall sequence at ZFALL_FPS. Frame 3 is named bascfall3.png in this revision.
+- The corpse holds its final frame, fades, and is removed. The detached head/arm have separate gravity, landing, and fade behavior.
+
+ASSET FILES REQUIRED
+- uploads/basicwalk1-7.png, uploads/basicinjuredwalk1-7.png
+- uploads/basiceat1-7.png, uploads/basicinjuredeat1-7.png
+- uploads/basicdeadwalk1-7.png, uploads/basicdeadeat1-5.png
+- uploads/basicfall1-2.png and uploads/bascfall3.png, uploads/basicfall4-9.png
+- uploads/basichead.png and uploads/basicarm.png
+
+The excerpts below are copied directly from the working source. Line ranges are included to make reintegration easier. The complete stepZombies function includes this game's plant-eating/game-over integration; when porting it, preserve the headless/falling branches and adapt its other game-specific references.
+
+
+========== Sprite-load helper required by zUpdateSprite (game.js 112-135) ==========
+// ---------- Sprite cache + idle animation manager ----------
+const spriteCache = (window.__spriteCache = window.__spriteCache || new Map());
+function cacheSprite(src) {
+  let image = spriteCache.get(src);
+  if (!image) {
+    image = new Image();
+    image.src = src;
+    spriteCache.set(src, image);
+  }
+  return image;
+}
+function showSpriteWhenReady(img, src) {
+  if (img.dataset.spriteSrc === src) return;
+  img.dataset.spriteSrc = src;
+  const cached = cacheSprite(src);
+  if (cached.complete) {
+    if (cached.naturalWidth > 0) img.src = src;
+    return;
+  }
+  cached.addEventListener("load", () => {
+    if (img.dataset.spriteSrc === src && img.isConnected) img.src = src;
+  }, { once: true });
+}
+const animators = (window.__animators = window.__animators || []); // { img, def, frame, acc, cell }
+
+========== Animation constants, sizing, phase helpers, and zombie state (game.js 919-1003) ==========
+// Zombie sprite animations. Two damage stages: full -> "basic", under half
+// health -> "injured". At zero health the head pops off; the zombie keeps
+// moving or chewing without damaging plants before its fall topple.
+// Frame files live in uploads/.
+const ZSTAGE_BASIC = "basic";
+const ZSTAGE_INJURED = "injured";
+const ZOMBIE_INJURED_FRAC = 0.5; // hp fraction below which the injured sprites show
+const ZSTAGE_CFG = {
+  [ZSTAGE_BASIC]:   { walk: 7, eat: 7 },
+  [ZSTAGE_INJURED]: { walk: 7, eat: 7 },
+};
+const ZFALL_FRAMES = 9;
+const ZHEADLESS_WALK_FRAMES = 7;
+const ZHEADLESS_EAT_FRAMES = 5;
+const ZHEADLESS_DURATION = 3.5; // let the headless animation loop before the collapse
+const ZWALK_FPS = 4; // 0.25s per frame
+const ZEAT_FPS = 7;
+const ZFALL_FPS = 5; // 0.2 seconds per fall sprite
+
+// The death sprites are cropped (the head is removed), so their native files
+// are much shorter than the standing walk sprite. Stretching them to the full
+// container height makes the corpse look giant. Render them at a height that
+// keeps the zombie the same physical size as when it stood (proportional to
+// the 54px standing sprite). Height is given as a fraction of the 150px
+// container: spriteNativeHeight / 54.
+const Z_HEIGHT_NORMAL = 54; // standing walk/injured-walk native height (px)
+const Z_HEIGHT_PHASE = {
+  normal: 1,
+  headlessWalk: 33 / Z_HEIGHT_NORMAL,
+  headlessEat: 35 / Z_HEIGHT_NORMAL,
+  fall: 40 / Z_HEIGHT_NORMAL,
+};
+
+// Set the rendered image height for the current phase so death sprites stay
+// sized like the monster rather than blowing up to fill the whole container.
+function zSetPhase(z, phase) {
+  if (z.phase === phase) return;
+  z.phase = phase;
+  z.img.style.height = Z_HEIGHT_PHASE[phase] * 100 + "%";
+}
+
+// Choose the current damage stage from remaining HP.
+function zStageFor(z) {
+  return z.hp / ZOMBIE_HP >= ZOMBIE_INJURED_FRAC ? ZSTAGE_BASIC : ZSTAGE_INJURED;
+}
+
+const nextFire = {}; // "r,c" -> seconds until this peashooter fires again
+
+// Cache of which lane has a live zombie, rebuilt once per loop tick.
+let zombieLanes = new Set();
+
+function spawnZombie() {
+  const r = Math.floor(Math.random() * ROWS);
+  const z = {
+    r,
+    y: ((r + 1) / ROWS) * 100,
+    x: 104, // just off the right edge
+    hp: ZOMBIE_HP,
+    eating: null, // { cell, c, timeLeft }
+    // animation state
+    stage: ZSTAGE_BASIC,
+    phase: "normal",
+    animFrame: 0,
+    animT: 0,
+    headless: false, // true after the head pops off and before the collapse
+    headlessEating: false,
+    headlessT: 0,
+    falling: false, // true during the death topple
+    fading: false, // true during the post-topple linger + fade-out
+    fadeT: 0,
+    armPopped: false, // true once the arm fell off on injury
+    dead: false,
+    el: document.createElement("div"),
+  };
+  z.el.className = "zombie";
+  z.el.style.left = z.x + "%";
+  z.el.style.top = z.y + "%";
+  z.img = document.createElement("img");
+  z.img.draggable = false;
+  z.img.src = zWalkSrc(z, 0);
+  zSetPhase(z, "normal");
+  z.el.appendChild(z.img);
+  zombieLayer.appendChild(z.el);
+  zombies.push(z);
+}
+
+========== Sprite selection and animation stepping (game.js 1005-1094) ==========
+// ---------- Zombie sprite helpers ----------
+// File prefix per damage stage, then a walk/eat/fall frame name.
+function zStagePrefix(stage) {
+  return stage === ZSTAGE_INJURED ? "basicinjured" : "basic";
+}
+// Walk / eat frames cycle. Fall is a one-shot index into `basicfallN` (frame 3
+// files as `bascfall3.png`).
+function zWalkSrc(z, frame) {
+  const frames = ZSTAGE_CFG[z.stage].walk;
+  const n = ((frame % frames) + frames) % frames + 1;
+  return `uploads/${zStagePrefix(z.stage)}walk${n}.png`;
+}
+function zEatSrc(z, frame) {
+  const frames = ZSTAGE_CFG[z.stage].eat;
+  const n = ((frame % frames) + frames) % frames + 1;
+  return `uploads/${zStagePrefix(z.stage)}eat${n}.png`;
+}
+function zHeadlessSrc(z, frame) {
+  if (z.headlessEating) {
+    const n = (frame % ZHEADLESS_EAT_FRAMES) + 1;
+    return `uploads/basicdeadeat${n}.png`;
+  }
+  const n = (frame % ZHEADLESS_WALK_FRAMES) + 1;
+  return `uploads/basicdeadwalk${n}.png`;
+}
+function zFallSrc(frame) {
+  const n = Math.min(frame, ZFALL_FRAMES);
+  return `uploads/${n === 3 ? "bascfall" : "basicfall"}${n}.png`;
+}
+// Update the sprite's damage stage + frame. Walking uses walk frames, chewing
+// uses eat frames, and the death topple uses the fall sequence. Entering a death
+// phase swaps in a fresh <img> so the old standing sprite can't flash at the
+// corpse's height or be hidden by a cached-load race.
+function zUpdateSprite(z) {
+  const prevPhase = z.phase;
+  const phase = z.falling ? "fall" : "normal";
+  zSetPhase(z, phase);
+  const src = z.falling ? zFallSrc(z.animFrame)
+    : (z.headless ? zHeadlessSrc(z, z.animFrame)
+      : (z.eating ? zEatSrc(z, z.animFrame) : zWalkSrc(z, z.animFrame)));
+  const spriteHeight = z.falling ? Z_HEIGHT_PHASE.fall
+    : z.headless
+      ? Z_HEIGHT_PHASE[z.headlessEating ? "headlessEat" : "headlessWalk"]
+      : Z_HEIGHT_PHASE.normal;
+  if (z.img) z.img.style.height = spriteHeight * 100 + "%";
+
+  if (phase !== prevPhase && phase !== "normal") {
+    // Keep the previous sprite visible until the first fall frame is ready.
+    const previous = z.img;
+    const fresh = document.createElement("img");
+    fresh.draggable = false;
+    fresh.style.height = spriteHeight * 100 + "%";
+    fresh.style.visibility = "hidden";
+    const show = () => {
+      if (!fresh.parentNode) return;
+      fresh.style.visibility = "visible";
+      if (previous && previous !== fresh) previous.remove();
+    };
+    fresh.addEventListener("load", show, { once: true });
+    fresh.addEventListener("error", () => {
+      if (!fresh.parentNode) return;
+      fresh.remove();
+      if (z.img === fresh) z.img = previous;
+    }, { once: true });
+    z.img = fresh;
+    z.el.appendChild(fresh);
+    fresh.src = src;
+    if (fresh.complete && fresh.naturalWidth > 0) show();
+  } else {
+    showSpriteWhenReady(z.img, src);
+  }
+}
+
+// Advance the current frame. Different cycle lengths & native sizes per stage,
+// so per-frame time is derived from the preferred FPS.
+function zAdvanceAnim(z, dt, fps) {
+  z.animT += dt;
+  const period = 1 / fps;
+  while (z.animT >= period) {
+    z.animT -= period;
+    z.animFrame += 1;
+    if (!z.falling) {
+      const frames = z.headless
+        ? (z.headlessEating ? ZHEADLESS_EAT_FRAMES : ZHEADLESS_WALK_FRAMES)
+        : (z.eating ? ZSTAGE_CFG[z.stage].eat : ZSTAGE_CFG[z.stage].walk);
+      z.animFrame %= frames;
+    }
+    zUpdateSprite(z);
+  }
+}
+
+========== Head/arm debris and its physics/fade (game.js 1102-1198) ==========
+// ---------- Body-part debris (arm / head) ----------
+// The arm and head fall onto the lawn, linger, then fade independently. Coordinates
+// are percent of the stage, so gravity is tuned in those units (stage is 960x600,
+// 1% y = 6px).
+const debris = (window.__debris = window.__debris || []);
+const DEBRIS_GRAVITY = 70; // %/s^2
+
+function spawnDebris({ src, x, y, vy, vx, ground, rotSpeed, owner }) {
+  const el = document.createElement("img");
+  el.className = "zombie-debris";
+  el.draggable = false;
+  el.src = src;
+  el.style.left = x + "%";
+  el.style.top = y + "%";
+  el.style.width = (src.includes("arm") ? 50 : 100) + "px";
+  zombieLayer.appendChild(el);
+  debris.push({ el, x, y, vy, vx, ground, rotSpeed, rot: 0, landed: false, fadeT: 0, owner });
+}
+
+function zPopPart(z, kind) {
+  const arm = kind === "arm";
+  spawnDebris({
+    src: arm ? "uploads/basicarm.png" : "uploads/basichead.png",
+    x: z.x,
+    y: z.y - (arm ? 24 : 40), // start near where the part sits
+    vy: arm ? 0 : -30,        // arm pops off (drops); head flings up lightly
+    vx: arm ? 0 : -6,
+    ground: z.y,              // lands on the current lane
+    rotSpeed: arm ? 0 : -40,  // arm doesn't spin
+    owner: z,
+  });
+}
+
+function zStartHeadless(z) {
+  z.headless = true;
+  z.headlessEating = Boolean(z.eating);
+  z.headlessT = ZHEADLESS_DURATION;
+  z.eating = null;
+  z.animFrame = 0;
+  z.animT = 0;
+  zPopPart(z, "head");
+  zUpdateSprite(z);
+}
+
+function zStartFall(z) {
+  z.falling = true;
+  z.animFrame = 1;
+  z.animT = 0;
+  zUpdateSprite(z);
+}
+
+function stepDebris(dt) {
+  for (const d of debris) {
+    if (!d.landed) {
+      d.rot += d.rotSpeed * dt;
+    } else {
+      d.fadeT += dt;
+      const hold = 1.4;
+      const fade = 1.2;
+      if (d.fadeT > hold) {
+        const opacity = 1 - Math.min(1, (d.fadeT - hold) / fade);
+        d.el.style.opacity = String(opacity);
+        if (opacity <= 0) {
+          d.el.remove();
+          debris.splice(debris.indexOf(d), 1);
+          continue;
+        }
+      }
+    }
+    if (!d.landed) {
+      d.vy += DEBRIS_GRAVITY * dt;
+      d.x += d.vx * dt;
+      d.y += d.vy * dt;
+      if (d.y >= d.ground) {
+        d.y = d.ground;
+        d.vy = 0;
+        d.vx = 0;
+        d.landed = true;
+        d.rot = 0;
+      }
+    }
+    d.el.style.left = d.x + "%";
+    d.el.style.top = d.y + "%";
+    d.el.style.transform = d.landed
+      ? "translate(-50%,-50%)"
+      : `translate(-50%,-50%) rotate(${d.rot}deg)`;
+  }
+}
+
+function clearDebrisFor(z) {
+  for (let i = debris.length - 1; i >= 0; i--) {
+    if (debris[i].owner === z) {
+      debris[i].el.remove();
+      debris.splice(i, 1);
+    }
+  }
+}
+
+========== Zombie state machine: headless phase, collapse, corpse fade (game.js 1200-1305) ==========
+function stepZombies(dt) {
+  zombieLanes = new Set();
+  for (const z of zombies) {
+    // A dying zombie plays its topple animation to completion, then lingers on
+    // the final frame and slowly fades out before despawning.
+    if (z.falling) {
+      if (!z.fading) {
+        zAdvanceAnim(z, dt, ZFALL_FPS);
+        if (z.animFrame >= ZFALL_FRAMES) {
+          z.fading = true;
+          z.fadeT = 0;
+        }
+      } else {
+        z.fadeT += dt;
+        const hold = 0.6; // seconds on the final frame before fading
+        const fade = 1.2; // seconds to fade out
+        if (z.fadeT > hold) {
+          const t = Math.min(1, (z.fadeT - hold) / fade);
+          z.el.style.opacity = String(1 - t);
+          if (t >= 1) {
+            z.el.remove();
+            z.dead = true;
+            clearDebrisFor(z);
+            zombies.splice(zombies.indexOf(z), 1);
+          }
+        }
+      }
+      continue;
+    }
+
+    if (z.headless) {
+      z.headlessT -= dt;
+      if (z.headlessEating) {
+        zAdvanceAnim(z, dt, ZEAT_FPS);
+      } else {
+        z.x -= ZOMBIE_SPEED * dt;
+        zAdvanceAnim(z, dt, ZWALK_FPS);
+      }
+      if (z.headlessT <= 0) zStartFall(z);
+      z.el.style.left = z.x + "%";
+      if (!z.falling && z.x <= 100) zombieLanes.add(z.r);
+      if (z.x <= 0) triggerGameOver(z);
+      continue;
+    }
+
+    // Refresh the damage stage (arm falls off as HP drops).
+    const nextStage = zStageFor(z);
+    if (nextStage !== z.stage) {
+      z.stage = nextStage;
+      z.animFrame = 0; // restart the cycle so the swap reads cleanly
+      if (nextStage === ZSTAGE_INJURED && !z.armPopped) {
+        z.armPopped = true;
+        zPopPart(z, "arm"); // arm flies off the moment it gets hurt
+      }
+      zUpdateSprite(z);
+    }
+
+    // If the zombie has reached a plant, eat it.
+    const { c, cell } = getZombieCell(z);
+    if (cell) {
+      // Zombie is chewing on the plant: deal damage. The plant's HP drives
+      // both how long it survives and its visual damage stage.
+      if (!z.eating || z.eating.c !== c) {
+        z.eating = { cell, c };
+        z.animFrame = 0;
+      }
+      cell.hp = (cell.hp ?? 20) - EAT_DPS * dt;
+      if (cell.hp <= 0) {
+        // Plant fully eaten: remove it from the grid/layer.
+        state.grid[z.r][c] = null;
+        const slot = cellEls.find((e) => e.r === z.r && e.c === c).slot;
+        // Drop the plant's animator + producer before detaching its image.
+        const at = animators.findIndex((a) => a.img.parentElement === slot);
+        if (at !== -1) animators.splice(at, 1);
+        slot.innerHTML = "";
+        const pi = producers.findIndex((p) => p.slot === slot);
+        if (pi !== -1) producers.splice(pi, 1);
+        z.eating = null;
+      }
+      zAdvanceAnim(z, dt, ZEAT_FPS);
+    } else {
+      // No plant here, keep walking: continuous slow shuffle, no pauses.
+      z.eating = null;
+      z.x -= ZOMBIE_SPEED * dt;
+      zAdvanceAnim(z, dt, ZWALK_FPS);
+    }
+    z.el.style.left = z.x + "%";
+    // Peashooters only open fire once the zombie has actually stepped onto the
+    // lane (on the lawn at or left of the right lawn edge), not while it is
+    // still off-screen or already dead. A zombie stays targetable through its
+    // death topple so a peashooter keeps firing as the corpse falls.
+    if (!z.falling && z.x <= 100) zombieLanes.add(z.r);
+    // A zombie has reached the end of the lawn (the house): the player loses.
+    if (z.x <= 0) triggerGameOver(z);
+  }
+  // Remove zombies that walked fully off the left edge.
+  for (let i = zombies.length - 1; i >= 0; i--) {
+    const z = zombies[i];
+    if (z.x < -10 && !z.falling) {
+      z.el.remove();
+      z.dead = true;
+      zombies.splice(i, 1);
+    }
+  }
+  syncEatingSound();
+}
+
+========== Damage-to-head-pop trigger in the projectile hit loop (game.js 1346-1372) ==========
+function stepPeas(dt) {
+  for (const p of peas) {
+    p.x += PEA_SPEED * dt;
+    p.el.style.left = p.x + "%";
+  }
+  // Hit test: pea lands on a zombie in its lane if it's reached/passed it.
+  for (let pi = peas.length - 1; pi >= 0; pi--) {
+    const p = peas[pi];
+    let hit = false;
+    for (const z of zombies) {
+      if (z.r !== p.r) continue;
+      if (p.x >= z.x - PEA_HIT_MARGIN) {
+        z.hp -= PEA_DMG;
+        playPeaHitSound();
+        if (z.hp <= 0 && !z.headless && !z.falling) {
+          zStartHeadless(z);
+        }
+        hit = true;
+        break;
+      }
+    }
+    if (hit || p.x > 108) {
+      p.el.remove();
+      peas.splice(pi, 1);
+    }
+  }
+}
+
+========== Required CSS (style.css 404-431) ==========
+/* ---------- Zombies (placeholder cube) + peas ---------- */
+#zombie-layer {
+  position: absolute;
+  inset: 0;
+  z-index: 6;
+  pointer-events: none;
+}
+.zombie {
+  position: absolute;
+  width: 170px;
+  height: 150px;
+  transform: translate(-50%, -100%);
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+}
+.zombie img {
+  height: 100%;
+  image-rendering: pixelated;
+  pointer-events: none;
+}
+.zombie-debris {
+  position: absolute;
+  height: auto;
+  transform: translate(-50%, -50%);
+  image-rendering: pixelated;
+  pointer-events: none;
+}
+
+========== Main-loop update hooks (game.js 1385-1405) ==========
+  const dt = previousFrameTime === null
+    ? 1 / 60
+    : Math.min(Math.max((now - previousFrameTime) / 1000, 0), 0.1);
+  previousFrameTime = now;
+  stepAnims(now);
+  stepPlantAnims(now);
+  stepProducers(dt);
+  updateCooldowns();
+  zombieSpawnTimer -= dt;
+  if (zombieSpawnTimer <= 0) {
+    if (!game.graceSoundPlayed) {
+      playGraceSound();
+      game.graceSoundPlayed = true;
+    }
+    spawnZombie();
+    zombieSpawnTimer = ZOMBIE_INTERVAL;
+  }
+  stepZombies(dt);
+  stepDebris(dt);
+  stepPeashooters(dt);
+  stepPeas(dt);
+
+PORTING DEPENDENCIES
+The JavaScript excerpts expect the host game to provide: ROWS, COLS, state.grid, cellEls, animators, producers, zombieLayer, zombies, showSpriteWhenReady, syncEatingSound(), triggerGameOver(), and (for the complete original stepZombies/stepPeas excerpts) plant and pea helpers/constants. Also keep the update order: stepZombies(dt), stepDebris(dt), then projectile hits via stepPeas(dt). The CSS requires the zombie layer to overlay the lawn and the zombie image to bottom-align within its 170x150px container.

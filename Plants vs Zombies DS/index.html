@@ -1,0 +1,231 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <link rel="preload" href="StartAdvHover.png" as="image" />
+  <link rel="preload" href="TOP_Intro1.png" as="image" />
+  <link rel="preload" href="TOP_loading_BG.png" as="image" />
+  <link rel="preload" href="TOP_Main_Menu_BG.png" as="image" />
+  <link rel="preload" href="Top_Screen_BG.png" as="image" />
+  <link rel="preload" href="Top_Screen_Zombie.png" as="image" />
+  <link rel="preload" href="Crow.png" as="image" />
+  <link rel="preload" href="Crow_E1.png" as="image" />
+  <link rel="preload" href="Crow_E2.png" as="image" />
+  <link rel="preload" href="Crow_E3.png" as="image" />
+  <link rel="preload" href="Crow_GOTSTRUCKBYLIGHTNING1.png" as="image" />
+  <link rel="preload" href="Crow_GOTSTRUCKBYLIGHTNING2.png" as="image" />
+  <link rel="preload" href="Shovel_In_Slot.png" as="image" />
+  <link rel="preload" href="Shovel_Slot.png" as="image" />
+  <link rel="preload" href="Shovel.png" as="image" />
+  <link rel="preload" href="Lane_Roll.png" as="image" />
+  <link rel="stylesheet" href="style.css" />
+  <title>Plants Vs Zombies DS</title>
+</head>
+<body>
+  <div id="scaler">
+  <div id="top-screen" aria-hidden="true">
+    <img id="top-intro-image" src="TOP_Intro1.png" alt="" />
+    <div id="top-loading-background"></div>
+    <div id="top-menu-background"></div>
+    <div id="top-more-background" aria-hidden="true"></div>
+    <div id="top-game-background"></div>
+    <div id="top-screen-zombie-layer" aria-hidden="true"></div>
+    <div id="top-level-label">Level 1-1</div>
+    <div id="level-progress" role="progressbar" aria-label="Level progress" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0">
+      <div class="level-progress-track">
+        <img class="level-progress-background" src="uploads/Loading_Bar_Background.png" alt="" />
+        <div id="level-progress-fill"><img class="level-progress-fill-art" src="uploads/Loading_Bar_Progress.png" alt="" /></div>
+        <img class="level-progress-overlay" src="uploads/Loading_Bar_Overlay.png" alt="" />
+        <img id="level-progress-head" src="uploads/Loading_Head.png" alt="" />
+        <img id="progress-flag" src="uploads/Flag.png" alt="Final wave" />
+      </div>
+    </div>
+    <div id="menu-crow">
+      <img id="menu-crow-perched" src="Crow.png" alt="" />
+      <img id="menu-crow-emote-1" src="Crow_E1.png" alt="" />
+      <img id="menu-crow-emote-2" src="Crow_E2.png" alt="" />
+      <img id="menu-crow-emote-3" src="Crow_E3.png" alt="" />
+      <img id="menu-crow-strike-1" src="Crow_GOTSTRUCKBYLIGHTNING1.png" alt="" />
+      <img id="menu-crow-strike-2" src="Crow_GOTSTRUCKBYLIGHTNING2.png" alt="" />
+      <div id="menu-crow-fly" aria-hidden="true">
+        <img class="menu-crow-fly-frame frame-1" src="uploads/Crow_Fly1.png" alt="" />
+        <img class="menu-crow-fly-frame frame-2" src="uploads/Crow_Fly2.png" alt="" />
+        <img class="menu-crow-fly-frame frame-3" src="uploads/Crow_Fly3.png" alt="" />
+        <img class="menu-crow-fly-frame frame-4" src="uploads/Crow_Fly4.png" alt="" />
+      </div>
+    </div>
+    <div id="top-screen-blackout" class="screen-blackout"></div>
+    <div id="top-level-whiteout" aria-hidden="true"></div>
+  </div>
+  <div id="stage">
+    <div id="house-label" aria-hidden="true"></div>
+    <div id="load-screen">
+      <span class="load-badge">LOADING</span>
+      <span id="load-status">…</span>
+    </div>
+    <header id="topbar">
+      <div id="sun-counter">
+        <img src="Sun.png" alt="Sun" class="sun-coin" />
+        <span id="sun-amount">0</span>
+      </div>
+      <div id="seedbar">
+        <div class="seed-packet" id="seed-peashooter" data-seed="peashooter">
+          <div class="seed-icon"></div>
+          <span class="seed-cost">100</span>
+        </div>
+      </div>
+      <div id="topbar-right">
+        <button id="pause-btn" type="button" title="Pause" aria-label="Pause" disabled><img src="Pause.png" alt="" /></button>
+      </div>
+    </header>
+
+    <div id="lawn">
+      <div id="yard-pan">
+        <img id="house-art" class="yard-art" src="uploads/House.png" alt="" />
+        <img id="road-art" class="yard-art" src="uploads/Road.png" alt="" />
+        <div id="road-zombies" aria-hidden="true"></div>
+        <div id="lawn-grid"></div>
+        <div id="lane-roll-layer" aria-hidden="true"></div>
+        <div id="plant-layer"></div>
+        <div id="cell-hitlayer"></div>
+        <div id="sun-layer"></div>
+        <div id="pea-layer"></div>
+        <div id="zombie-layer"></div>
+        <div id="lawnmower-layer"></div>
+        <img id="yard-fence" class="yard-trim" src="uploads/Top_Fence.png" alt="" />
+        <img id="yard-bottom" class="yard-trim" src="uploads/Bottom.png" alt="" />
+      </div>
+    </div>
+    <button id="shovel-button" type="button" aria-label="Pick up shovel">
+      <img src="Shovel_In_Slot.png" alt="" />
+    </button>
+    <img id="shovel-cursor" src="Shovel.png" alt="" aria-hidden="true" />
+
+    <div id="intro">
+      <span id="intro-text"></span>
+    </div>
+    <div id="tutorial-bar" aria-hidden="true" aria-live="polite">
+      <span id="tutorial-text"></span>
+    </div>
+    <div id="wave-announcement" aria-hidden="true">
+      <span id="wave-announcement-text"></span>
+    </div>
+
+    <div id="pause-overlay" aria-hidden="true">
+      <div id="pause-panel">
+        <img id="pause-panel-art" src="Pause_Pop_Up.png" alt="Paused" />
+        <input id="music-volume" class="volume-slider music-volume" type="range" min="0" max="1" step="0.01" value="0.5" aria-label="Music volume" />
+        <input id="effects-volume" class="volume-slider effects-volume" type="range" min="0" max="1" step="0.01" value="1" aria-label="Sound effects volume" />
+        <button id="fullscreen-toggle" class="fullscreen-toggle" type="button" role="checkbox" aria-checked="false" aria-label="Fullscreen">
+          <img class="fullscreen-checkbox" src="uploads/Checkbox_Unchecked.png" alt="" />
+        </button>
+        <button id="restart-level" type="button" aria-label="Restart level"><img src="Restart_Level.png" alt="" /></button>
+        <button id="pause-main-menu" type="button" aria-label="Main menu"><img src="Main_Menu.png" alt="" /></button>
+        <button id="back-to-game" type="button" aria-label="Back to game"><img src="Back_To_Game.png" alt="" /></button>
+        <button id="options-ok" type="button" aria-label="OK"><img src="uploads/OK_Button.png" alt="" /></button>
+      </div>
+      <div id="return-menu-confirmation" aria-hidden="true">
+        <div id="return-menu-confirmation-card">
+          <img id="return-menu-confirmation-art" src="ReturnToMainMenuConfirmationPOPUP.png" alt="Return to the main menu?" />
+          <button id="return-menu-confirm" type="button" aria-label="Confirm return to main menu"><img src="ReturnToMainMenuConfirm.png" alt="" /></button>
+          <button id="return-menu-cancel" type="button" aria-label="Cancel return to main menu"><img src="ReturnToMainMenuCancel.png" alt="" /></button>
+        </div>
+      </div>
+      <div id="restart-level-confirmation" aria-hidden="true">
+        <div id="restart-level-confirmation-card">
+          <img id="restart-level-confirmation-art" src="Restart_Level_Confirmation_POPUP.png" alt="Restart this level?" />
+          <button id="restart-level-confirm" type="button" aria-label="Confirm restart level"><img src="Restart.png" alt="" /></button>
+          <button id="restart-level-cancel" type="button" aria-label="Cancel restart level"><img src="ReturnToMainMenuCancel.png" alt="" /></button>
+        </div>
+      </div>
+    </div>
+    <div id="gameover-overlay" aria-hidden="true">
+      <div id="gameover-image-wrap"><img id="gameover-image" src="Game_Over_Text.png" alt="The zombies ate your brains" /></div>
+      <button id="menu-btn">MENU</button>
+    </div>
+    <button id="sunflower-reward" type="button" aria-label="Sunflower seed packet" aria-hidden="true"><img src="hotbarsun.png" alt="Sunflower" /></button>
+    <div id="level-whiteout" aria-hidden="true"></div>
+    <div id="win-overlay" aria-hidden="true">
+      <div class="win-card">
+        <h1>YOU WIN!</h1>
+        <p class="win-sub">You beat all 10 Adventure levels! Every level stays open in Level Select.</p>
+        <button id="win-menu-btn" type="button">Return to Menu</button>
+      </div>
+    </div>
+
+    <div id="intro-sequence" aria-hidden="true">
+      <img id="intro-sequence-image" alt="" />
+    </div>
+
+    <button id="title-loading" class="hidden" type="button" aria-label="Touch to start" aria-hidden="true">
+      <span id="loading-bar-wrap">
+        <img id="loading-bottom" src="LoadingBottom.png" alt="" />
+        <span id="loading-trail-wrap"><img id="loading-trail" src="LoadingTop.png" alt="" /></span>
+        <img id="loading-roll" src="GrassRoll.png" alt="" />
+        <span id="loading-prompt">loading...</span>
+      </span>
+    </button>
+
+    <div id="menu-overlay">
+      <span id="menu-username"></span>
+      <button id="menu-play" type="button" aria-label="Start adventure">
+        <img id="menu-play-image" src="StartAdvNormal.png" alt="" />
+        <img id="menu-play-hover-image" src="StartAdvHover.png" alt="" aria-hidden="true" />
+      </button>
+      <button id="menu-more" type="button" aria-label="More">
+        <img class="more-normal" src="uploads/More_Button_NORMAL.png" alt="" />
+        <img class="more-hover" src="uploads/More_Button_HOVER.png" alt="" aria-hidden="true" />
+      </button>
+      <div id="more-bottom-layer" aria-hidden="true">
+        <button id="more-options" type="button" aria-label="Options">
+          <img class="options-normal" src="uploads/Options_Text_NORMAL.png" alt="" />
+          <img class="options-hover" src="uploads/Options_Text_HOVER.png" alt="" aria-hidden="true" />
+        </button>
+        <button id="more-back" type="button" aria-label="Back">Back</button>
+      </div>
+    </div>
+
+    <div id="menu-grass-wind" aria-hidden="true"><img class="menu-grass-frame active" src="Grass1.png" alt="" /><img class="menu-grass-frame" src="Grass2.png" alt="" /><img class="menu-grass-frame" src="Grass3.png" alt="" /></div>
+    <div id="game-screen-blackout" class="screen-blackout"></div>
+  </div>
+  </div>
+
+  <div id="layout-controls">
+    <button id="layout-toggle" type="button" aria-expanded="false" aria-controls="layout-menu">Screen Layout</button>
+    <div id="quick-load-controls" hidden>
+      <button id="quick-load-toggle" type="button" aria-expanded="false" aria-controls="quick-load-menu">Level Select</button>
+      <div id="quick-load-menu" hidden>
+        <label for="quick-load-level">Level</label>
+        <select id="quick-load-level">
+          <option value="1">1-1</option>
+          <option value="2">1-2</option>
+          <option value="3">1-3</option>
+          <option value="4">1-4</option>
+        </select>
+        <button id="quick-load-confirm" type="button">Load</button>
+      </div>
+    </div>
+    <div id="layout-menu" role="group" aria-label="Screen layout options" hidden>
+      <button class="layout-option selected" type="button" data-layout="stacked" aria-pressed="true" aria-label="Top screen above bottom screen">
+        <span class="layout-preview stacked"><span class="preview-top">TOP</span><span class="preview-bottom">BOTTOM</span></span>
+        <span class="layout-option-label">Top / Bottom</span>
+      </button>
+      <button class="layout-option" type="button" data-layout="stacked-reversed" aria-pressed="false" aria-label="Bottom screen above top screen">
+        <span class="layout-preview stacked reversed"><span class="preview-top">TOP</span><span class="preview-bottom">BOTTOM</span></span>
+        <span class="layout-option-label">Bottom / Top</span>
+      </button>
+      <button class="layout-option" type="button" data-layout="side-by-side" aria-pressed="false" aria-label="Top screen left, bottom screen right">
+        <span class="layout-preview side-by-side"><span class="preview-top">TOP</span><span class="preview-bottom">BOTTOM</span></span>
+        <span class="layout-option-label">Top left / Bottom right</span>
+      </button>
+      <button class="layout-option" type="button" data-layout="side-reversed" aria-pressed="false" aria-label="Bottom screen left, top screen right">
+        <span class="layout-preview side-reversed"><span class="preview-top">TOP</span><span class="preview-bottom">BOTTOM</span></span>
+        <span class="layout-option-label">Bottom left / Top right</span>
+      </button>
+    </div>
+  </div>
+
+  <script defer src="game.js"></script>
+</body>
+</html>
