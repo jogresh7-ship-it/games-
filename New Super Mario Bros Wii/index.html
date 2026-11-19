@@ -1,0 +1,416 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no" />
+  <title>New Super Mario Bros. Wii (Fan Prototype)</title>
+  <style>
+    html, body { margin: 0; height: 100%; background: #000; overflow: hidden; touch-action: none; user-select: none; -webkit-user-select: none; }
+    body { display: flex; align-items: center; justify-content: center; }
+    canvas { image-rendering: pixelated; image-rendering: crisp-edges; }
+    #touch { position: fixed; inset: auto 0 0 0; height: 40%; display: none; pointer-events: none; }
+    body.touch #touch { display: block; }
+    .b { position: absolute; bottom: 18px; width: 72px; height: 72px; border-radius: 50%; background: rgba(255,255,255,.2); border: 2px solid rgba(255,255,255,.5); color: #fff; font: bold 24px sans-serif; display: flex; align-items: center; justify-content: center; pointer-events: auto; }
+    #tl { left: 14px; } #tr { left: 100px; } #tj { right: 20px; width: 88px; height: 88px; background: rgba(230,40,40,.35); } #tg { right: 120px; width: 60px; height: 60px; font-size: 14px; }
+  </style>
+</head>
+<body>
+<canvas id="c" width="480" height="270"></canvas>
+<div id="touch"><div class="b" id="tl">◀</div><div class="b" id="tr">▶</div><div class="b" id="tg">RUN</div><div class="b" id="tj">A</div></div>
+<script>
+(() => {
+"use strict";
+const VW = 480, VH = 270, T = 24;
+const cv = document.getElementById("c"), ctx = cv.getContext("2d");
+ctx.imageSmoothingEnabled = false;
+function fit() { const s = Math.min(innerWidth / VW, innerHeight / VH); cv.style.width = VW * s + "px"; cv.style.height = VH * s + "px"; }
+addEventListener("resize", fit); fit();
+
+// ---------- images ----------
+const I = {};
+for (const n of ["tiles_std", "tiles_grass", "bg0", "bg1", "bg2", "bg3", "mario", "luigi", "coin_icon", "starcoin", ...[...Array(10)].map((_, i) => "n" + i)]) {
+  I[n] = new Image(); I[n].src = "assets/" + n + ".png";
+}
+const ok = (im) => im.complete && im.naturalWidth;
+function tile(sheet, r, c, x, y) { const im = I[sheet]; if (ok(im)) ctx.drawImage(im, c * T, r * T, T, T, Math.round(x), Math.round(y), T, T); }
+
+// ---------- sound ----------
+let ac = null;
+function au() { if (!ac) try { ac = new (window.AudioContext || window.webkitAudioContext)(); } catch (e) {} if (ac && ac.state === "suspended") ac.resume(); }
+function tone(f, d, type = "square", v = 0.05, slide = 0, delay = 0) {
+  if (!ac) return; const t = ac.currentTime + delay, o = ac.createOscillator(), g = ac.createGain();
+  o.type = type; o.frequency.setValueAtTime(f, t); if (slide) o.frequency.exponentialRampToValueAtTime(Math.max(30, f + slide), t + d);
+  g.gain.setValueAtTime(v, t); g.gain.exponentialRampToValueAtTime(0.0001, t + d); o.connect(g); g.connect(ac.destination); o.start(t); o.stop(t + d + 0.02);
+}
+const SND = {
+  jump() { tone(330, 0.18, "square", 0.05, 500); },
+  coin() { tone(988, 0.06, "square", 0.05); tone(1319, 0.25, "square", 0.05, 0, 0.06); },
+  stomp() { tone(300, 0.12, "square", 0.07, -200); },
+  bump() { tone(140, 0.08, "triangle", 0.12); },
+  brk() { tone(90, 0.15, "sawtooth", 0.08, -40); },
+  oneup() { [660, 784, 1319, 1047, 1175, 1568].forEach((f, i) => tone(f, 0.1, "square", 0.05, 0, i * 0.09)); },
+  die() { [784, 740, 698, 0, 523, 494, 466, 440].forEach((f, i) => f && tone(f, 0.14, "square", 0.05, 0, i * 0.13)); },
+  clear() { [523, 659, 784, 1047, 784, 1047, 1319].forEach((f, i) => tone(f, 0.16, "square", 0.05, 0, i * 0.12)); },
+  star() { tone(1568, 0.1, "triangle", 0.08); tone(2093, 0.3, "triangle", 0.08, 0, 0.1); },
+};
+
+// ---------- input ----------
+const K = {}, P1 = {};
+const MAP = { ArrowLeft: "l", KeyA: "l", ArrowRight: "r", KeyD: "r", ArrowDown: "d", KeyS: "d", ArrowUp: "u", KeyW: "u",
+  Space: "j", KeyZ: "j", KeyK: "j", ShiftLeft: "g", ShiftRight: "g", KeyX: "g", KeyJ: "g", Enter: "s", KeyP: "s", Escape: "s" };
+addEventListener("keydown", (e) => { const k = MAP[e.code]; if (!k) return; e.preventDefault(); au(); if (!K[k]) P1[k] = true; K[k] = true; });
+addEventListener("keyup", (e) => { const k = MAP[e.code]; if (k) K[k] = false; });
+if ("ontouchstart" in window || navigator.maxTouchPoints > 0) document.body.classList.add("touch");
+for (const [id, k] of [["tl", "l"], ["tr", "r"], ["tj", "j"], ["tg", "g"]]) {
+  const el = document.getElementById(id);
+  el.addEventListener("pointerdown", (e) => { e.preventDefault(); au(); if (!K[k]) P1[k] = true; K[k] = true; });
+  for (const ev of ["pointerup", "pointercancel", "pointerleave"]) el.addEventListener(ev, () => { K[k] = false; });
+}
+cv.addEventListener("pointerdown", () => { au(); P1.s = true; });
+
+// ---------- levels (built from simple pieces) ----------
+const ROWS = 11;
+function makeLevel(n) {
+  const W = 190 + n * 20;
+  const g = [...Array(ROWS)].map(() => Array(W).fill(" "));
+  const set = (x, y, c) => { if (x >= 0 && x < W && y >= 0 && y < ROWS) g[y][x] = c; };
+  const ground = (x0, x1, top = 9) => { for (let x = x0; x <= x1; x++) for (let y = top; y < ROWS; y++) set(x, y, "#"); };
+  const pipe = (x, top) => { set(x, top, "P"); };
+  const row = (x, y, s) => { for (let i = 0; i < s.length; i++) if (s[i] !== " ") set(x + i, y, s[i]); };
+  const ents = [];
+  let rnd = 1234 + n * 77; const R = () => (rnd = (rnd * 16807) % 2147483647) / 2147483647;
+  ground(0, 14);
+  row(6, 5, "?B?B");
+  let x = 15;
+  let sc = 0;
+  while (x < W - 30) {
+    const kind = Math.floor(R() * 6);
+    const gap = n > 1 && R() < 0.35 + n * 0.08 ? 2 + Math.floor(R() * 2) : 0;
+    x += gap;
+    const len = 10 + Math.floor(R() * 10);
+    const top = gap && R() < 0.4 ? 8 : 9;
+    ground(x, x + len, top);
+    if (kind === 0) row(x + 3, top - 4, "B?B?B");
+    if (kind === 1) { pipe(x + 4, top - 2 - Math.floor(R() * 2)); ents.push({ t: "walker", x: x + 9, y: top - 1 }); }
+    if (kind === 2) { for (let i = 0; i < 4; i++) for (let h = 0; h <= i; h++) set(x + 3 + i, top - 1 - h, "S"); row(x + 9, top - 4, "cccc"); }
+    if (kind === 3) { row(x + 2, top - 4, "?"); row(x + 6, top - 4, "BBBBB"); row(x + 7, top - 7, "?M?"); ents.push({ t: "walker", x: x + 8, y: top - 1 }, { t: "walker", x: x + 10, y: top - 1 }); }
+    if (kind === 4) { row(x + 2, top - 3, "cccccc"); ents.push({ t: "walker", x: x + 6, y: top - 1 }); }
+    if (kind === 5) { pipe(x + 3, top - 2); pipe(x + 9, top - 3); row(x + 5, top - 5, "ccc"); ents.push({ t: "walker", x: x + 7, y: top - 1 }); }
+    if (sc < 3 && R() < 0.3) { row(x + Math.floor(len / 2), top - 6, "*"); sc++; }
+    x += len + 1;
+  }
+  while (sc < 3) { row(x - 40 + sc * 8, 4, "*"); sc++; }
+  ground(x, W - 1);
+  // end staircase + goal pole
+  for (let i = 0; i < 8; i++) for (let h = 0; h <= i; h++) set(x + 2 + i, 8 - h, "S");
+  const goalX = x + 16;
+  return { W, g, ents, goalX, name: "1-" + n };
+}
+const solidCh = (c) => c === "#" || c === "B" || c === "?" || c === "M" || c === "=" || c === "S" || c === "P" || c === "p";
+
+// expand pipes into tiles reaching the ground
+function preparePipes(L) {
+  for (let y = 0; y < ROWS; y++) for (let x = 0; x < L.W; x++) if (L.g[y][x] === "P") {
+    L.g[y][x + 1] = "Q";
+    for (let yy = y + 1; yy < ROWS && L.g[yy][x] !== "#"; yy++) { L.g[yy][x] = "p"; L.g[yy][x + 1] = "q"; }
+  }
+}
+const isSolid = (c) => solidCh(c) || c === "Q" || c === "q";
+
+// ---------- state ----------
+const G = { mode: "title", t: 0, level: 1, lives: 5, coins: 0, score: 0, stars: 0, time: 400 * 60, char: "mario", modeT: 0, starsGot: {} };
+let L = null, pl = null, ents = [], fx = [], camX = 0;
+
+function loadLevel(n) {
+  G.level = n;
+  L = makeLevel(n);
+  preparePipes(L);
+  G.lvlStars = 0;
+  ents = L.ents.map((e) => ({ ...e, x: e.x * T, y: e.y * T, vx: -0.6, vy: 0, alive: true, squash: 0, w: 20, h: 20 }));
+  fx = [];
+  pl = { x: 3 * T, y: 7 * T, vx: 0, vy: 0, w: 18, h: 26, ground: false, face: 1, dead: false, deadT: 0, jumpHeld: 0, inv: 0, clear: false };
+  camX = 0; G.time = 400 * 60; G.mode = "intro"; G.modeT = 0;
+}
+
+function cell(tx, ty) { if (tx < 0) return "#"; if (tx >= L.W || ty < 0) return " "; if (ty >= ROWS) return " "; return L.g[ty][tx]; }
+function solidAt(px, py) { return isSolid(cell(Math.floor(px / T), Math.floor(py / T))); }
+
+function hitBlock(tx, ty) {
+  const c = cell(tx, ty);
+  if (c === "?" || c === "M") {
+    L.g[ty][tx] = "=";
+    fx.push({ k: "bump", tx, ty, t: 0 });
+    if (c === "M") { G.lives++; SND.oneup(); fx.push({ k: "text", x: tx * T + 12, y: ty * T, s: "1-UP", t: 0 }); }
+    else { G.coins++; G.score += 200; SND.coin(); fx.push({ k: "coin", x: tx * T + 12, y: ty * T, vy: -5, t: 0 }); }
+    bumpEnemies(tx, ty);
+  } else if (c === "B") {
+    L.g[ty][tx] = " "; SND.brk(); G.score += 50;
+    for (let i = 0; i < 4; i++) fx.push({ k: "brick", x: tx * T + 12, y: ty * T + 12, vx: (i % 2 ? 1 : -1) * (1.5 + (i > 1 ? 1 : 0)), vy: -5 + (i > 1 ? 2 : 0), t: 0 });
+    bumpEnemies(tx, ty);
+  } else if (isSolid(c)) SND.bump();
+}
+function bumpEnemies(tx, ty) {
+  for (const e of ents) if (e.alive && Math.abs(e.x - tx * T) < 24 && Math.abs(e.y + e.h - ty * T) < 6) killEnemy(e, true);
+}
+function killEnemy(e, flip) { e.alive = false; e.dead = flip ? "flip" : "squash"; e.squash = 30; e.vy = flip ? -4 : 0; G.score += 100; SND.stomp(); }
+
+// ---------- player ----------
+function movePlayer() {
+  const p = pl;
+  if (p.dead) { p.deadT++; if (p.deadT > 30) { p.vy += 0.35; p.y += p.vy; } if (p.deadT > 170) { G.lives--; if (G.lives <= 0) { G.mode = "over"; G.modeT = 0; } else loadLevel(G.level); } return; }
+  if (p.inv > 0) p.inv--;
+  if (p.clear) {
+    p.vx = p.x < L.goalX * T + 70 ? 1.5 : 0; p.face = 1;
+  } else {
+    const run = K.g, max = run ? 4.2 : 2.6, acc = p.ground ? 0.14 : 0.1;
+    if (K.l) { p.vx = Math.max(-max, p.vx - acc * (p.vx > 0 ? 2 : 1)); p.face = -1; }
+    else if (K.r) { p.vx = Math.min(max, p.vx + acc * (p.vx < 0 ? 2 : 1)); p.face = 1; }
+    else p.vx *= p.ground ? 0.85 : 0.97;
+    if (Math.abs(p.vx) < 0.05) p.vx = 0;
+    if (Math.abs(p.vx) > max) p.vx *= 0.96;
+    if (P1.j && p.ground) {
+      const luigi = G.char === "luigi";
+      p.vy = -(7.4 + Math.abs(p.vx) * 0.35 + (luigi ? 0.9 : 0)); p.ground = false; p.jumpHeld = 18; SND.jump();
+    }
+  }
+  if (K.j && p.jumpHeld > 0 && p.vy < 0) { p.jumpHeld--; p.vy -= G.char === "luigi" ? 0.32 : 0.28; } else p.jumpHeld = 0;
+  p.vy = Math.min(9, p.vy + 0.5);
+  // horizontal
+  p.x += p.vx;
+  if (p.vx > 0 && (solidAt(p.x + p.w, p.y + 2) || solidAt(p.x + p.w, p.y + p.h - 1))) { p.x = Math.floor((p.x + p.w) / T) * T - p.w - 0.01; p.vx = 0; }
+  if (p.vx < 0 && (solidAt(p.x, p.y + 2) || solidAt(p.x, p.y + p.h - 1))) { p.x = Math.floor(p.x / T + 1) * T; p.vx = 0; }
+  if (p.x < camX) { p.x = camX; p.vx = Math.max(0, p.vx); }
+  // vertical
+  p.y += p.vy; p.ground = false;
+  if (p.vy >= 0) {
+    if (solidAt(p.x + 2, p.y + p.h) || solidAt(p.x + p.w - 2, p.y + p.h)) { p.y = Math.floor((p.y + p.h) / T) * T - p.h; p.vy = 0; p.ground = true; }
+  } else {
+    const hx = p.x + p.w / 2, hy = p.y;
+    if (solidAt(p.x + 3, hy) || solidAt(p.x + p.w - 3, hy)) {
+      hitBlock(Math.floor(hx / T), Math.floor(hy / T));
+      p.y = Math.floor(hy / T + 1) * T; p.vy = 1;
+    }
+  }
+  if (p.y > VH + 40) { if (p.clear) { p.y = VH + 40; p.vy = 0; } else die(); }
+  // coins + star coins
+  for (const [ox, oy] of [[4, 4], [p.w - 4, 4], [4, p.h - 4], [p.w - 4, p.h - 4]]) {
+    const tx = Math.floor((p.x + ox) / T), ty = Math.floor((p.y + oy) / T);
+    const c = cell(tx, ty);
+    if (c === "c") { L.g[ty][tx] = " "; G.coins++; G.score += 200; SND.coin(); }
+    if (c === "*") { L.g[ty][tx] = " "; G.stars++; G.lvlStars++; G.score += 1000; SND.star(); fx.push({ k: "text", x: tx * T + 12, y: ty * T, s: "STAR COIN!", t: 0 }); }
+  }
+  if (G.coins >= 100) { G.coins -= 100; G.lives++; SND.oneup(); }
+  // goal pole
+  if (!p.clear && p.x + p.w > L.goalX * T + 8) {
+    p.clear = true; G.mode = "clear"; G.modeT = 0;
+    const h = Math.max(0, 9 * T - p.y);
+    G.score += Math.round(h / T) * 400 + Math.floor(G.time / 60) * 10;
+    SND.clear();
+  }
+}
+function die() { if (pl.dead || pl.clear) return; pl.dead = true; pl.deadT = 0; pl.vy = -7; pl.vx = 0; SND.die(); }
+
+function moveEnemies() {
+  for (const e of ents) {
+    if (e.dead) { e.squash--; if (e.dead === "flip") { e.vy += 0.4; e.y += e.vy; } continue; }
+    if (e.x > camX + VW + 60 || e.x < camX - 100) continue;
+    e.vy = Math.min(8, e.vy + 0.4);
+    e.x += e.vx;
+    const side = e.vx > 0 ? e.x + e.w : e.x;
+    if (solidAt(side, e.y + 4) || solidAt(side, e.y + e.h - 2)) e.vx *= -1;
+    e.y += e.vy;
+    if (solidAt(e.x + 2, e.y + e.h) || solidAt(e.x + e.w - 2, e.y + e.h)) { e.y = Math.floor((e.y + e.h) / T) * T - e.h; e.vy = 0; }
+    if (e.y > VH + 50) e.alive = false, e.dead = "gone", e.squash = 0;
+    // player contact
+    const p = pl;
+    if (!p.dead && !p.clear && p.x < e.x + e.w && p.x + p.w > e.x && p.y < e.y + e.h && p.y + p.h > e.y) {
+      if (p.vy > 0 && p.y + p.h - e.y < 14) { killEnemy(e, false); p.vy = K.j ? -8 : -5; }
+      else if (p.inv <= 0) die();
+    }
+  }
+}
+
+// ---------- drawing ----------
+function drawBG() {
+  const sky = ctx.createLinearGradient(0, 0, 0, VH);
+  sky.addColorStop(0, "#5aa8ff"); sky.addColorStop(1, "#cfeaff");
+  ctx.fillStyle = sky; ctx.fillRect(0, 0, VW, VH);
+  const layers = [["bg0", 0.15, 40], ["bg2", 0.35, 150], ["bg3", 0.55, 190]];
+  for (const [n, f, y] of layers) {
+    const im = I[n]; if (!ok(im)) continue;
+    let ox = -((camX * f) % im.width);
+    for (let x = ox; x < VW; x += im.width) ctx.drawImage(im, Math.round(x), y);
+  }
+}
+const GT = { // grass tileset picks [row, col]
+  top: [0, 3], topL: [0, 2], topR: [0, 7], fill: [1, 3], fillL: [1, 2], fillR: [1, 7], fill2: [2, 3], fill2L: [2, 2], fill2R: [2, 7],
+};
+function drawTiles() {
+  const x0 = Math.max(0, Math.floor(camX / T) - 1), x1 = Math.min(L.W - 1, Math.floor((camX + VW) / T) + 1);
+  for (let y = 0; y < ROWS; y++) for (let x = x0; x <= x1; x++) {
+    const c = L.g[y][x]; if (c === " ") continue;
+    const sx = x * T - camX, sy = y * T;
+    let bump = 0;
+    for (const f of fx) if (f.k === "bump" && f.tx === x && f.ty === y) bump = -Math.sin((f.t / 10) * Math.PI) * 8;
+    if (c === "#") {
+      const up = cell(x, y - 1) !== "#", lf = cell(x - 1, y) !== "#" && x > 0, rt = cell(x + 1, y) !== "#";
+      const k = up ? "top" : ((y - 9) % 2 ? "fill2" : "fill");
+      const t = GT[k + (lf ? "L" : rt ? "R" : "")] || GT[k];
+      tile("tiles_grass", t[0], t[1], sx, sy);
+    } else if (c === "B") tile("tiles_std", 3, 0, sx, sy + bump);
+    else if (c === "?" || c === "M") tile("tiles_std", 3, 1, sx, sy + bump);
+    else if (c === "=") tile("tiles_std", 3, 2, sx, sy + bump);
+    else if (c === "S") tile("tiles_std", 3, 2, sx, sy);
+    else if (c === "P") tile("tiles_std", 6, 0, sx, sy);
+    else if (c === "Q") tile("tiles_std", 6, 1, sx, sy);
+    else if (c === "p") tile("tiles_std", 7, 0, sx, sy);
+    else if (c === "q") tile("tiles_std", 7, 1, sx, sy);
+    else if (c === "c") { const w = Math.abs(Math.cos(G.t / 12)); const im = I.tiles_std; if (ok(im)) ctx.drawImage(im, 14 * T, 1 * T, T, T, sx + 12 - 12 * w, sy, 24 * w, T); }
+    else if (c === "*") { const im = I.starcoin; if (ok(im)) ctx.drawImage(im, sx - 6, sy - 6 + Math.sin(G.t / 15) * 2, 36, 36); }
+  }
+  // goal pole (generic)
+  const gx = L.goalX * T - camX;
+  ctx.fillStyle = "#3a9c3a"; ctx.fillRect(gx + 10, 9 * T - 8 * T, 4, 8 * T);
+  ctx.fillStyle = "#f4d03f"; ctx.beginPath(); ctx.arc(gx + 12, 9 * T - 8 * T, 6, 0, 7); ctx.fill();
+  const fy = G.mode === "clear" ? Math.min(9 * T - 30, 9 * T - 8 * T + 10 + G.modeT * 3) : 9 * T - 8 * T + 10;
+  ctx.fillStyle = "#e83a3a"; ctx.beginPath(); ctx.moveTo(gx + 10, fy); ctx.lineTo(gx - 16, fy + 10); ctx.lineTo(gx + 10, fy + 20); ctx.fill();
+  tile("tiles_std", 3, 2, gx, 8 * T);
+}
+function drawEnemy(e) {
+  if (e.dead === "gone" || (e.dead && e.squash <= 0)) return;
+  const x = e.x - camX + e.w / 2, y = e.y + e.h / 2;
+  ctx.save(); ctx.translate(x, y);
+  if (e.dead === "squash") ctx.scale(1.2, 0.35);
+  if (e.dead === "flip") ctx.scale(1, -1);
+  // an original placeholder enemy: a round spiky "Prickle"
+  const wob = Math.sin(G.t / 5) * 1.5;
+  ctx.fillStyle = "#6b2fa0";
+  ctx.beginPath();
+  for (let i = 0; i < 16; i++) { const a = i / 16 * Math.PI * 2, r = i % 2 ? 9 : 12.5; ctx.lineTo(Math.cos(a) * r, Math.sin(a) * r + wob * 0.3); }
+  ctx.fill();
+  ctx.fillStyle = "#fff"; ctx.beginPath(); ctx.arc(-3.5, -2, 3, 0, 7); ctx.arc(3.5, -2, 3, 0, 7); ctx.fill();
+  ctx.fillStyle = "#000"; const look = e.vx > 0 ? 1 : -1; ctx.beginPath(); ctx.arc(-3.5 + look, -2, 1.4, 0, 7); ctx.arc(3.5 + look, -2, 1.4, 0, 7); ctx.fill();
+  ctx.fillStyle = "#3a8a3a"; ctx.fillRect(-7, 9, 5, 3); ctx.fillRect(2, 9, 5, 3);
+  ctx.restore();
+}
+function drawPlayer() {
+  const p = pl, im = I[G.char]; if (!ok(im)) return;
+  if (p.inv > 0 && Math.floor(p.inv / 3) % 2) return;
+  const hgt = 30, wdt = hgt * im.width / im.height;
+  const run = Math.abs(p.vx) > 0.2 && p.ground;
+  const bob = run ? Math.abs(Math.sin(G.t / 3)) * -3 : 0;
+  const squash = !p.ground ? (p.vy < 0 ? 1.08 : 0.96) : 1;
+  ctx.save();
+  ctx.translate(Math.round(p.x - camX + p.w / 2), Math.round(p.y + p.h + bob));
+  if (p.dead) ctx.rotate(Math.sin(p.deadT / 4) * 0.3);
+  ctx.scale(p.face, squash);
+  ctx.rotate(run ? Math.sin(G.t / 3) * 0.08 : 0);
+  ctx.drawImage(im, -wdt / 2, -hgt, wdt, hgt);
+  ctx.restore();
+}
+function drawFx() {
+  for (const f of fx) {
+    f.t++;
+    if (f.k === "coin") { f.y += f.vy; f.vy += 0.35; const im = I.tiles_std; if (ok(im)) ctx.drawImage(im, 14 * T, T, T, T, f.x - camX - 12, f.y - 12, T, T); }
+    else if (f.k === "brick") { f.x += f.vx; f.y += f.vy; f.vy += 0.4; const im = I.tiles_std; if (ok(im)) ctx.drawImage(im, 0, 3 * T, 12, 12, f.x - camX - 6, f.y - 6, 12, 12); }
+    else if (f.k === "text") { f.y -= 0.6; text(f.s, f.x - camX, f.y, 10, "#fff"); }
+  }
+  fx = fx.filter((f) => !((f.k === "bump" && f.t > 10) || (f.k === "coin" && f.t > 28) || (f.k === "brick" && f.t > 80) || (f.k === "text" && f.t > 50)));
+}
+function text(s, x, y, size = 12, color = "#fff", align = "center") {
+  ctx.font = `bold ${size}px "Arial Rounded MT Bold", "Trebuchet MS", sans-serif`;
+  ctx.textAlign = align; ctx.textBaseline = "middle"; ctx.lineJoin = "round";
+  ctx.lineWidth = Math.max(3, size / 3.5); ctx.strokeStyle = "#000"; ctx.strokeText(s, x, y);
+  ctx.fillStyle = color; ctx.fillText(s, x, y); ctx.textAlign = "left"; ctx.textBaseline = "alphabetic";
+}
+function num(n, x, y, h = 16, pad = 0) {
+  let s = String(Math.max(0, Math.floor(n))); while (s.length < pad) s = "0" + s;
+  for (const d of s) { const im = I["n" + d]; if (!ok(im)) continue; const w = im.width * h / im.height; ctx.drawImage(im, x, y, w, h); x += w + 1; }
+  return x;
+}
+function drawHUD() {
+  const face = I[G.char];
+  if (ok(face)) ctx.drawImage(face, 8, 6, 20, 20 * face.height / face.width);
+  text("×", 34, 17, 12); num(G.lives, 42, 9, 16);
+  if (ok(I.coin_icon)) ctx.drawImage(I.coin_icon, 90, 6, 18, 20);
+  text("×", 115, 17, 12); num(G.coins, 123, 9, 16, 2);
+  for (let i = 0; i < 3; i++) { ctx.globalAlpha = i < (G.lvlStars || 0) ? 1 : 0.3; if (ok(I.starcoin)) ctx.drawImage(I.starcoin, 170 + i * 20, 6, 18, 18); }
+  ctx.globalAlpha = 1;
+  num(G.score, 300, 9, 16, 8);
+  text("TIME", 420, 17, 10, "#fff"); num(Math.ceil(G.time / 60), 440, 9, 16, 3);
+}
+
+// ---------- screens ----------
+function drawTitle() {
+  camX = G.t * 0.8; drawBG();
+  text("NEW SUPER", VW / 2, 60, 26, "#ffffff");
+  text("MARIO BROS. Wii", VW / 2, 92, 30, "#ff3b3b");
+  text("FAN PROTOTYPE", VW / 2, 120, 11, "#ffe14a");
+  const m = I.mario, l = I.luigi;
+  const sel = G.char === "mario";
+  if (ok(m)) { ctx.globalAlpha = sel ? 1 : 0.5; ctx.drawImage(m, VW / 2 - 80, 140, 50, 50 * m.height / m.width); }
+  if (ok(l)) { ctx.globalAlpha = sel ? 0.5 : 1; ctx.drawImage(l, VW / 2 + 30, 136, 50, 50 * l.height / l.width); }
+  ctx.globalAlpha = 1;
+  text(sel ? "▲ MARIO" : "LUIGI ▲", sel ? VW / 2 - 55 : VW / 2 + 55, 206, 11, sel ? "#ff6b6b" : "#6bff8b");
+  if (Math.floor(G.t / 30) % 2 === 0) text("PRESS ENTER / TAP TO START", VW / 2, 232, 12);
+  text("◀ ▶ pick player   Arrows: move   Space/Z: jump   Shift/X: run", VW / 2, 258, 9, "#dff");
+}
+
+// ---------- loop ----------
+function step() {
+  G.t++;
+  switch (G.mode) {
+    case "title":
+      if (P1.l) G.char = "mario"; if (P1.r) G.char = "luigi";
+      drawTitle();
+      if (P1.s || P1.j) { G.lives = 5; G.coins = 0; G.score = 0; G.stars = 0; loadLevel(1); }
+      break;
+    case "intro":
+      G.modeT++;
+      ctx.fillStyle = "#000"; ctx.fillRect(0, 0, VW, VH);
+      text("WORLD " + L.name, VW / 2, 110, 22);
+      if (ok(I[G.char])) ctx.drawImage(I[G.char], VW / 2 - 40, 140, 30, 30 * I[G.char].height / I[G.char].width);
+      text("× " + G.lives, VW / 2 + 15, 156, 16);
+      if (G.modeT > 120) G.mode = "play";
+      break;
+    case "play":
+    case "clear":
+      if (P1.s && G.mode === "play") { G.paused = !G.paused; }
+      if (!G.paused) {
+        if (G.mode === "play" && !pl.dead) { G.time--; if (G.time <= 0) die(); }
+        movePlayer(); moveEnemies();
+        const target = pl.x - VW * 0.4;
+        camX = Math.max(camX, Math.min(L.W * T - VW, target));
+        if (G.mode === "clear") { G.modeT++; if (G.modeT > 220) { if (G.level < 3) loadLevel(G.level + 1); else { G.mode = "win"; G.modeT = 0; } } }
+      }
+      drawBG(); drawTiles(); for (const e of ents) drawEnemy(e); drawPlayer(); drawFx(); drawHUD();
+      if (G.mode === "clear" && G.modeT > 60) text("COURSE CLEAR!", VW / 2, 100, 26, "#ffe14a");
+      if (G.paused) text("PAUSE", VW / 2, VH / 2, 22);
+      break;
+    case "over":
+      G.modeT++; ctx.fillStyle = "#000"; ctx.fillRect(0, 0, VW, VH); text("GAME OVER", VW / 2, VH / 2, 26);
+      if (G.modeT > 180 || (G.modeT > 40 && P1.s)) G.mode = "title";
+      break;
+    case "win":
+      G.modeT++; camX += 1; drawBG();
+      text("YOU BEAT WORLD 1!", VW / 2, 90, 24, "#ffe14a");
+      text("Score " + G.score + "   Star Coins " + G.stars + "/9", VW / 2, 130, 13);
+      if (Math.floor(G.t / 30) % 2 === 0) text("PRESS ENTER", VW / 2, 200, 12);
+      if (G.modeT > 60 && (P1.s || P1.j)) G.mode = "title";
+      break;
+  }
+  for (const k in P1) P1[k] = false;
+}
+let last = performance.now(), acc = 0;
+function frame(now) {
+  acc += Math.min(100, now - last); last = now;
+  let n = 0;
+  while (acc >= 1000 / 60 && n < 4) { acc -= 1000 / 60; n++; for (let k = 0; k < (window.__speed || 1); k++) step(); }
+  requestAnimationFrame(frame);
+}
+requestAnimationFrame(frame);
+if (location.hash === "#debug") window.__m = { G, get pl() { return pl; }, get L() { return L; }, loadLevel };
+})();
+</script>
+</body>
+</html>
