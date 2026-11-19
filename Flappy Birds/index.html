@@ -1,0 +1,199 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no" />
+  <title>Flappy Birds</title>
+  <style>
+    html, body { margin: 0; height: 100%; background: #222; overflow: hidden; touch-action: none; user-select: none; -webkit-user-select: none; }
+    body { display: flex; align-items: center; justify-content: center; }
+    canvas { image-rendering: pixelated; image-rendering: crisp-edges; }
+  </style>
+</head>
+<body>
+<canvas id="c" width="288" height="512"></canvas>
+<script>
+(() => {
+"use strict";
+const W = 288, H = 512, GROUND_Y = 400;
+const cv = document.getElementById("c"), ctx = cv.getContext("2d");
+ctx.imageSmoothingEnabled = false;
+function fit() {
+  const s = Math.min(innerWidth / W, innerHeight / H);
+  cv.style.width = W * s + "px"; cv.style.height = H * s + "px";
+}
+addEventListener("resize", fit); fit();
+
+// ---------- sprites ----------
+const NAMES = ["bg_day","bg_night","ground","getready","gameover","title","tutorial","play","scores","ok","menu","panel",
+  "medal_silver","medal_gold","medal_plat","medal_bronze","new","pause","pipe_red_top","pipe_red_bot","pipe_green_top","pipe_green_bot",
+  "y0","y1","y2","b0","b1","b2","r0","r1","r2","d0","d1","d2","d3","d4","d5","d6","d7","d8","d9"];
+const I = {};
+for (const n of NAMES) { I[n] = new Image(); I[n].src = "assets/" + n + ".png"; }
+const draw = (n, x, y) => { const im = I[n]; if (im.complete && im.naturalWidth) ctx.drawImage(im, Math.round(x), Math.round(y)); };
+const drawC = (n, x, y) => { const im = I[n]; if (im.naturalWidth) draw(n, x - im.width / 2, y - im.height / 2); };
+
+function number(n, cx, y, scale = 1) {
+  const s = String(n);
+  const ws = [...s].map((d) => (I["d" + d].width || 24) * scale + 2 * scale);
+  let x = cx - ws.reduce((a, b) => a + b, 0) / 2;
+  for (let i = 0; i < s.length; i++) {
+    const im = I["d" + s[i]];
+    if (im.naturalWidth) ctx.drawImage(im, Math.round(x), Math.round(y), im.width * scale, im.height * scale);
+    x += ws[i];
+  }
+}
+function numberRight(n, rx, y, scale) {
+  const s = String(n);
+  let x = rx;
+  for (let i = s.length - 1; i >= 0; i--) {
+    const im = I["d" + s[i]];
+    x -= (im.width + 2) * scale;
+    if (im.naturalWidth) ctx.drawImage(im, Math.round(x), Math.round(y), im.width * scale, im.height * scale);
+  }
+}
+
+// ---------- sound (tiny synth) ----------
+let ac = null;
+function au() { if (!ac) try { ac = new (window.AudioContext || window.webkitAudioContext)(); } catch (e) {} if (ac && ac.state === "suspended") ac.resume(); return ac; }
+function tone(f, d, type = "square", v = 0.06, slide = 0, delay = 0) {
+  if (!ac) return; const t = ac.currentTime + delay, o = ac.createOscillator(), g = ac.createGain();
+  o.type = type; o.frequency.setValueAtTime(f, t); if (slide) o.frequency.exponentialRampToValueAtTime(Math.max(30, f + slide), t + d);
+  g.gain.setValueAtTime(v, t); g.gain.exponentialRampToValueAtTime(0.0001, t + d); o.connect(g); g.connect(ac.destination); o.start(t); o.stop(t + d + 0.02);
+}
+const SND = {
+  wing() { tone(500, 0.08, "triangle", 0.08, 300); },
+  point() { tone(1046, 0.08, "square", 0.05); tone(1568, 0.16, "square", 0.05, 0, 0.08); },
+  hit() { tone(180, 0.15, "sawtooth", 0.1, -120); },
+  die() { tone(600, 0.45, "triangle", 0.08, -480, 0.15); },
+  swoosh() { tone(300, 0.2, "sine", 0.05, 600); },
+};
+
+// ---------- state ----------
+let best = 0;
+try { best = Number(localStorage.getItem("flappy_best")) || 0; } catch (e) {}
+const S = { mode: "title", t: 0, score: 0, newBest: false, flash: 0, deadT: 0 };
+let bird, pipes, groundX = 0, theme;
+function newRound() {
+  const colors = ["y", "b", "r"];
+  theme = { bg: Math.random() < 0.5 ? "bg_day" : "bg_night", bird: colors[Math.floor(Math.random() * 3)], pipe: Math.random() < 0.8 ? "green" : "red" };
+  bird = { x: 80, y: 240, vy: 0, rot: 0, frame: 0 };
+  pipes = [];
+  S.score = 0; S.newBest = false;
+}
+newRound();
+const GAP = 100, PIPE_W = 52, SPEED = 2, SPACING = 165;
+function spawnPipe(x) {
+  const top = 50 + Math.random() * (GROUND_Y - GAP - 110);
+  pipes.push({ x, top, scored: false });
+}
+
+function flap() {
+  au();
+  if (S.mode === "title") { S.mode = "ready"; SND.swoosh(); newRound(); return; }
+  if (S.mode === "ready") { S.mode = "play"; spawnPipe(W + 40); spawnPipe(W + 40 + SPACING); }
+  if (S.mode === "play") { bird.vy = -4.6; SND.wing(); return; }
+  if (S.mode === "over" && S.deadT > 50) { S.mode = "ready"; SND.swoosh(); newRound(); }
+}
+addEventListener("keydown", (e) => { if (["Space", "ArrowUp", "KeyW", "Enter"].includes(e.code)) { e.preventDefault(); if (!e.repeat) flap(); } });
+cv.addEventListener("pointerdown", (e) => { e.preventDefault(); flap(); });
+
+function die() {
+  if (S.mode !== "play") return;
+  S.mode = "dying"; S.flash = 8; SND.hit(); setTimeout(() => SND.die(), 100);
+  if (S.score > best) { best = S.score; S.newBest = true; try { localStorage.setItem("flappy_best", String(best)); } catch (e) {} }
+}
+
+// ---------- update ----------
+function update() {
+  S.t++;
+  const moving = S.mode === "title" || S.mode === "ready" || S.mode === "play";
+  if (moving) groundX = (groundX - SPEED) % 24;
+  if (S.mode !== "dying" && S.mode !== "over") bird.frame = Math.floor(S.t / 5) % 3;
+  if (S.mode === "title" || S.mode === "ready") {
+    bird.y = (S.mode === "title" ? 230 : 240) + Math.sin(S.t / 8) * 4;
+    bird.rot = 0;
+    if (S.mode === "title") bird.x = W / 2;
+    else bird.x = 80;
+  }
+  if (S.mode === "play" || S.mode === "dying") {
+    bird.vy = Math.min(bird.vy + 0.25, 9);
+    bird.y += bird.vy;
+    bird.rot = bird.vy < 0 ? -0.45 : Math.min(Math.PI / 2, bird.rot + 0.05 * (bird.vy > 3 ? 2.2 : 0.6));
+    if (bird.y < -20) bird.y = -20;
+    if (bird.y + 12 >= GROUND_Y) {
+      bird.y = GROUND_Y - 12;
+      if (S.mode === "play") die();
+      S.mode = "over"; S.deadT = 0;
+    }
+  }
+  if (S.mode === "play") {
+    for (const p of pipes) {
+      p.x -= SPEED;
+      if (!p.scored && p.x + PIPE_W < bird.x) { p.scored = true; S.score++; SND.point(); }
+      // collision: bird circle-ish box vs pipes
+      const bx = bird.x - 12, by = bird.y - 10, bw = 24, bh = 20;
+      if (bx + bw > p.x && bx < p.x + PIPE_W && (by < p.top || by + bh > p.top + GAP)) die();
+    }
+    if (pipes.length && pipes[0].x < -PIPE_W) pipes.shift();
+    if (pipes.length && pipes[pipes.length - 1].x < W - SPACING + 40) spawnPipe(pipes[pipes.length - 1].x + SPACING);
+  }
+  if (S.mode === "over") S.deadT++;
+  if (S.flash > 0) S.flash--;
+}
+
+// ---------- render ----------
+function render() {
+  draw(theme.bg, 0, 0);
+  for (const p of pipes) {
+    const top = I["pipe_" + theme.pipe + "_top"], bot = I["pipe_" + theme.pipe + "_bot"];
+    if (top.naturalWidth) ctx.drawImage(top, Math.round(p.x), Math.round(p.top - top.height));
+    if (bot.naturalWidth) ctx.drawImage(bot, Math.round(p.x), Math.round(p.top + GAP));
+  }
+  draw("ground", groundX, GROUND_Y);
+  // bird
+  const bn = theme.bird + [0, 1, 2, 1][S.mode === "over" || S.mode === "dying" ? 1 : bird.frame % 3];
+  const bi = I[bn];
+  if (bi.naturalWidth) {
+    ctx.save(); ctx.translate(Math.round(bird.x), Math.round(bird.y)); ctx.rotate(bird.rot);
+    ctx.drawImage(bi, -bi.width / 2, -bi.height / 2); ctx.restore();
+  }
+  if (S.mode === "title") {
+    drawC("title", W / 2, 140);
+    drawC("play", W / 2 - 64, 330); drawC("scores", W / 2 + 64, 330);
+    ctx.fillStyle = "#fff"; ctx.font = "bold 11px monospace"; ctx.textAlign = "center";
+    ctx.fillText("TAP / CLICK / SPACE", W / 2, 385); ctx.textAlign = "left";
+  } else if (S.mode === "ready") {
+    number(0, W / 2, 50);
+    drawC("getready", W / 2, 150);
+    drawC("tutorial", W / 2 + 10, 270);
+  } else if (S.mode === "play" || S.mode === "dying") {
+    number(S.score, W / 2, 50);
+  } else if (S.mode === "over") {
+    const k = S.deadT;
+    drawC("gameover", W / 2, 120);
+    const py = Math.max(170, 520 - k * 18);
+    draw("panel", W / 2 - 120, py);
+    const shown = Math.min(S.score, Math.floor(Math.max(0, k - 25) / 2));
+    numberRight(shown, W / 2 + 97, py + 36, 0.6);
+    numberRight(best, W / 2 + 97, py + 78, 0.6);
+    if (S.newBest && k > 40) draw("new", W / 2 + 30, py + 60);
+    const medal = S.score >= 40 ? "medal_plat" : S.score >= 30 ? "medal_gold" : S.score >= 20 ? "medal_silver" : S.score >= 10 ? "medal_bronze" : null;
+    if (medal && k > 40) draw(medal, W / 2 - 94, py + 43);
+    if (k > 50) { drawC("play", W / 2 - 64, py + 175); drawC("scores", W / 2 + 64, py + 175); }
+  }
+  if (S.flash > 0) { ctx.fillStyle = `rgba(255,255,255,${S.flash / 8})`; ctx.fillRect(0, 0, W, H); }
+}
+
+let last = performance.now(), acc = 0;
+function frame(now) {
+  acc += Math.min(100, now - last); last = now;
+  while (acc >= 1000 / 60) { update(); acc -= 1000 / 60; }
+  render();
+  requestAnimationFrame(frame);
+}
+requestAnimationFrame(frame);
+})();
+</script>
+</body>
+</html>
