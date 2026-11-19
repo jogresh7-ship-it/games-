@@ -28,10 +28,14 @@ addEventListener("resize", fit); fit();
 
 // ---------- images ----------
 const I = {};
-for (const n of ["tiles_std", "tiles_grass", "bg0", "bg1", "bg2", "bg3", "mario", "luigi", "coin_icon", "starcoin", ...[...Array(10)].map((_, i) => "n" + i)]) {
+for (const n of ["tiles_std", "tiles_grass", "bg0", "bg1", "bg2", "bg3", "mario", "luigi", "toad_blue", "toad_yellow", "logo", "coin_icon", "starcoin", ...[...Array(10)].map((_, i) => "n" + i)]) {
   I[n] = new Image(); I[n].src = "assets/" + n + ".png";
 }
 const ok = (im) => im.complete && im.naturalWidth;
+const FRAMES = ["idle", "walk0", "walk1", "walk2", "walk3", "walk4", "walk5", "jump", "fall", "dead"];
+const CHAR_IDS = ["mario", "luigi", "toad_blue", "toad_yellow", "peach", "yoshi"];
+const SPR = {};
+for (const c of CHAR_IDS) for (const f of FRAMES) { const im = new Image(); im.src = `assets/chars/${c}_${f}.png`; SPR[c + "_" + f] = im; }
 function tile(sheet, r, c, x, y) { const im = I[sheet]; if (ok(im)) ctx.drawImage(im, c * T, r * T, T, T, Math.round(x), Math.round(y), T, T); }
 
 // ---------- sound ----------
@@ -106,6 +110,15 @@ function makeLevel(n) {
   const goalX = x + 16;
   return { W, g, ents, goalX, name: "1-" + n };
 }
+const CHARS = [
+  { id: "mario", name: "MARIO", color: "#ff6b6b", jump: 0, speed: 1, h: 40, note: "All-rounder" },
+  { id: "luigi", name: "LUIGI", color: "#6bff8b", jump: 0.9, speed: 1, h: 44, note: "Jumps highest" },
+  { id: "toad_blue", name: "BLUE TOAD", color: "#6bb8ff", jump: 0.3, speed: 1.08, h: 36, note: "Quick on his feet" },
+  { id: "toad_yellow", name: "YELLOW TOAD", color: "#ffe14a", jump: 0.3, speed: 1.08, h: 36, note: "Quick on his feet" },
+  { id: "peach", name: "PEACH", color: "#ff9ad5", jump: 0.2, speed: 0.96, h: 46, float: true, note: "Hold jump to float" },
+  { id: "yoshi", name: "YOSHI", color: "#7dff6b", jump: 0.4, speed: 1.04, h: 46, flutter: true, note: "Hold jump to flutter" },
+];
+const charInfo = () => CHARS.find((c) => c.id === G.char) || CHARS[0];
 const solidCh = (c) => c === "#" || c === "B" || c === "?" || c === "M" || c === "=" || c === "S" || c === "P" || c === "p";
 
 // expand pipes into tiles reaching the ground
@@ -162,18 +175,23 @@ function movePlayer() {
   if (p.clear) {
     p.vx = p.x < L.goalX * T + 70 ? 1.5 : 0; p.face = 1;
   } else {
-    const run = K.g, max = run ? 4.2 : 2.6, acc = p.ground ? 0.14 : 0.1;
+    const run = K.g, max = (run ? 4.2 : 2.6) * charInfo().speed, acc = p.ground ? 0.14 : 0.1;
     if (K.l) { p.vx = Math.max(-max, p.vx - acc * (p.vx > 0 ? 2 : 1)); p.face = -1; }
     else if (K.r) { p.vx = Math.min(max, p.vx + acc * (p.vx < 0 ? 2 : 1)); p.face = 1; }
     else p.vx *= p.ground ? 0.85 : 0.97;
     if (Math.abs(p.vx) < 0.05) p.vx = 0;
     if (Math.abs(p.vx) > max) p.vx *= 0.96;
     if (P1.j && p.ground) {
-      const luigi = G.char === "luigi";
-      p.vy = -(7.4 + Math.abs(p.vx) * 0.35 + (luigi ? 0.9 : 0)); p.ground = false; p.jumpHeld = 18; SND.jump();
+      p.vy = -(7.4 + Math.abs(p.vx) * 0.35 + charInfo().jump); p.ground = false; p.jumpHeld = 18; SND.jump();
     }
   }
   if (K.j && p.jumpHeld > 0 && p.vy < 0) { p.jumpHeld--; p.vy -= G.char === "luigi" ? 0.32 : 0.28; } else p.jumpHeld = 0;
+  const ci = charInfo();
+  if (p.ground) { p.floatT = 60; p.flutT = 40; }
+  if (!p.ground && K.j && p.vy > 0 && !p.dead) {
+    if (ci.float && p.floatT > 0) { p.floatT--; p.vy = 0.4; }
+    if (ci.flutter && p.flutT > 0) { p.flutT--; p.vy -= 0.95; if (p.flutT % 6 === 0) tone(700, 0.04, "triangle", 0.03); }
+  }
   p.vy = Math.min(9, p.vy + 0.5);
   // horizontal
   p.x += p.vx;
@@ -294,17 +312,19 @@ function drawEnemy(e) {
   ctx.restore();
 }
 function drawPlayer() {
-  const p = pl, im = I[G.char]; if (!ok(im)) return;
+  const p = pl;
   if (p.inv > 0 && Math.floor(p.inv / 3) % 2) return;
-  const hgt = 30, wdt = hgt * im.width / im.height;
-  const run = Math.abs(p.vx) > 0.2 && p.ground;
-  const bob = run ? Math.abs(Math.sin(G.t / 3)) * -3 : 0;
-  const squash = !p.ground ? (p.vy < 0 ? 1.08 : 0.96) : 1;
+  let f = "idle";
+  if (p.dead) f = "dead";
+  else if (!p.ground) f = p.vy < 0 ? "jump" : "fall";
+  else if (Math.abs(p.vx) > 0.2) { p.walkT = (p.walkT || 0) + Math.abs(p.vx) * 0.09; f = "walk" + (Math.floor(p.walkT) % 6); }
+  const im = SPR[G.char + "_" + f];
+  if (!ok(im)) return;
+  const hgt = charInfo().h, wdt = hgt * im.width / im.height;
   ctx.save();
-  ctx.translate(Math.round(p.x - camX + p.w / 2), Math.round(p.y + p.h + bob));
-  if (p.dead) ctx.rotate(Math.sin(p.deadT / 4) * 0.3);
-  ctx.scale(p.face, squash);
-  ctx.rotate(run ? Math.sin(G.t / 3) * 0.08 : 0);
+  ctx.translate(Math.round(p.x - camX + p.w / 2), Math.round(p.y + p.h + 1));
+  if (p.dead) ctx.translate(0, -4);
+  if (p.face < 0 && !p.dead) ctx.scale(-1, 1);
   ctx.drawImage(im, -wdt / 2, -hgt, wdt, hgt);
   ctx.restore();
 }
@@ -329,8 +349,8 @@ function num(n, x, y, h = 16, pad = 0) {
   return x;
 }
 function drawHUD() {
-  const face = I[G.char];
-  if (ok(face)) ctx.drawImage(face, 8, 6, 20, 20 * face.height / face.width);
+  const face = SPR[G.char + "_idle"];
+  if (ok(face)) ctx.drawImage(face, 10, 3, 24 * face.width / face.height, 24);
   text("×", 34, 17, 12); num(G.lives, 42, 9, 16);
   if (ok(I.coin_icon)) ctx.drawImage(I.coin_icon, 90, 6, 18, 20);
   text("×", 115, 17, 12); num(G.coins, 123, 9, 16, 2);
@@ -343,17 +363,22 @@ function drawHUD() {
 // ---------- screens ----------
 function drawTitle() {
   camX = G.t * 0.8; drawBG();
-  text("NEW SUPER", VW / 2, 60, 26, "#ffffff");
-  text("MARIO BROS. Wii", VW / 2, 92, 30, "#ff3b3b");
-  text("FAN PROTOTYPE", VW / 2, 120, 11, "#ffe14a");
-  const m = I.mario, l = I.luigi;
-  const sel = G.char === "mario";
-  if (ok(m)) { ctx.globalAlpha = sel ? 1 : 0.5; ctx.drawImage(m, VW / 2 - 80, 140, 50, 50 * m.height / m.width); }
-  if (ok(l)) { ctx.globalAlpha = sel ? 0.5 : 1; ctx.drawImage(l, VW / 2 + 30, 136, 50, 50 * l.height / l.width); }
-  ctx.globalAlpha = 1;
-  text(sel ? "▲ MARIO" : "LUIGI ▲", sel ? VW / 2 - 55 : VW / 2 + 55, 206, 11, sel ? "#ff6b6b" : "#6bff8b");
-  if (Math.floor(G.t / 30) % 2 === 0) text("PRESS ENTER / TAP TO START", VW / 2, 232, 12);
-  text("◀ ▶ pick player   Arrows: move   Space/Z: jump   Shift/X: run", VW / 2, 258, 9, "#dff");
+  const lg = I.logo;
+  if (ok(lg)) { const w = 300, h = w * lg.height / lg.width; ctx.drawImage(lg, VW / 2 - w / 2, 12, w, h); }
+  text("FAN PROTOTYPE", VW / 2, 142, 10, "#ffe14a");
+  const n = CHARS.length, gap = 64, x0 = VW / 2 - gap * (n - 1) / 2;
+  CHARS.forEach((c, i) => {
+    const sel = c.id === G.char;
+    const im = SPR[c.id + (sel ? "_walk" + (Math.floor(G.t / 6) % 6) : "_idle")]; if (!ok(im)) return;
+    const h = (sel ? 1.25 : 1) * c.h, w = h * im.width / im.height;
+    ctx.globalAlpha = sel ? 1 : 0.6;
+    ctx.drawImage(im, x0 + i * gap - w / 2, 206 - h, w, h);
+    ctx.globalAlpha = 1;
+  });
+  const ci = charInfo();
+  text("◀ " + ci.name + " ▶   " + ci.note, VW / 2, 218, 11, ci.color);
+  if (Math.floor(G.t / 30) % 2 === 0) text("PRESS ENTER / TAP TO START", VW / 2, 240, 12);
+  text("Arrows: move   Space/Z: jump   Shift/X: run", VW / 2, 260, 9, "#dff");
 }
 
 // ---------- loop ----------
@@ -361,7 +386,7 @@ function step() {
   G.t++;
   switch (G.mode) {
     case "title":
-      if (P1.l) G.char = "mario"; if (P1.r) G.char = "luigi";
+      if (P1.l || P1.r) { const i = CHARS.findIndex((c) => c.id === G.char); G.char = CHARS[(i + (P1.r ? 1 : CHARS.length - 1)) % CHARS.length].id; SND.coin(); }
       drawTitle();
       if (P1.s || P1.j) { G.lives = 5; G.coins = 0; G.score = 0; G.stars = 0; loadLevel(1); }
       break;
@@ -369,7 +394,7 @@ function step() {
       G.modeT++;
       ctx.fillStyle = "#000"; ctx.fillRect(0, 0, VW, VH);
       text("WORLD " + L.name, VW / 2, 110, 22);
-      if (ok(I[G.char])) ctx.drawImage(I[G.char], VW / 2 - 40, 140, 30, 30 * I[G.char].height / I[G.char].width);
+      { const im = SPR[G.char + "_walk" + (Math.floor(G.t / 6) % 6)]; if (ok(im)) ctx.drawImage(im, VW / 2 - 50, 128, 44 * im.width / im.height, 44); }
       text("× " + G.lives, VW / 2 + 15, 156, 16);
       if (G.modeT > 120) G.mode = "play";
       break;
