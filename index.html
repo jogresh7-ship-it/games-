@@ -1,126 +1,270 @@
 <!DOCTYPE html>
+<!--
+  Game Launcher, styled after Cine-Cloud (an open-source UI whose author says "feel free to fork it, copy it, remake it").
+  To add a game: add one entry to GAMES below. `dir` is the folder that holds its index.html.
+-->
 <html lang="en">
 <head>
-<meta charset="utf-8">
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Game Launcher</title>
-<meta name="viewport" content="width=device-width,initial-scale=1">
 <style>
-  *{box-sizing:border-box}
-  body{margin:0;min-height:100vh;font-family:"Trebuchet MS",system-ui,sans-serif;color:#eef;
-    background:radial-gradient(circle at 50% -20%,#2b3a8a,#0b0f2a 70%);}
-  header{padding:28px 20px 8px;text-align:center}
-  h1{margin:0;font-size:40px;letter-spacing:3px;text-shadow:0 4px 0 #000a}
-  .sub{opacity:.7;margin-top:6px}
-  .grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:18px;
-    max-width:1100px;margin:24px auto;padding:0 20px}
-  .tile{position:relative;height:170px;border-radius:16px;cursor:pointer;overflow:hidden;
-    border:3px solid #fff3;box-shadow:0 8px 20px #0008;transition:transform .12s,border-color .12s;
-    display:flex;flex-direction:column;justify-content:flex-end;padding:14px;outline:none}
-  .tile:hover,.tile:focus{transform:translateY(-4px) scale(1.03);border-color:#fff}
-  .tile .ico{position:absolute;top:14px;left:14px;font-size:54px;filter:drop-shadow(0 3px 0 #0006)}
-  .tile b{font-size:20px;text-shadow:0 2px 0 #0009}
-  .tile span{font-size:13px;opacity:.85}
-  .tag{position:absolute;top:12px;right:12px;font-size:11px;background:#000a;padding:3px 7px;border-radius:8px}
-  #player{display:none;position:fixed;inset:0;background:#000e;z-index:9;flex-direction:column}
-  #bar{display:flex;gap:10px;align-items:center;padding:10px 14px;background:#111a3a}
-  #bar button,#bar label{background:#3a5bd9;color:#fff;border:0;border-radius:8px;padding:8px 14px;
-    font:inherit;cursor:pointer}
-  #bar .x{margin-left:auto;background:#c33}
-  #title{font-weight:bold}
-  #stage{flex:1;display:flex;align-items:center;justify-content:center;overflow:hidden}
-  #stage iframe{width:100%;height:100%;border:0;background:#000}
-  #stage ruffle-player,#stage ruffle-embed{width:min(100%,960px);height:min(100%,720px)}
-  #msg{opacity:.8;text-align:center;padding:20px;max-width:520px;line-height:1.5}
-  input[type=file]{display:none}
-  footer{text-align:center;opacity:.5;font-size:12px;padding:20px}
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap');
+:root{--bg:#050505;--glass:rgba(22,22,25,.6);--glass-hover:rgba(35,35,40,.8);--border:rgba(255,255,255,.08);--text:#f5f5f7;--muted:#888890}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--text);font-family:'Inter',system-ui,-apple-system,"Segoe UI",sans-serif;
+  -webkit-font-smoothing:antialiased;user-select:none;height:100vh;display:flex;flex-direction:column;overflow:hidden}
+::-webkit-scrollbar{width:0}
+#boot{position:fixed;inset:0;background:#000;z-index:100;display:flex;flex-direction:column;justify-content:center;align-items:center;transition:opacity .6s}
+.fig-title{font-size:44px;font-weight:800;text-transform:uppercase;letter-spacing:20px;margin-left:20px;opacity:0;animation:txtIn 1.5s cubic-bezier(.2,.8,.2,1) forwards}
+.fig-line{width:0;height:2px;background:#fff;margin-top:15px;opacity:0;box-shadow:0 0 10px #fff;animation:lineGrow 1.5s ease .5s forwards}
+@keyframes txtIn{0%{letter-spacing:0;opacity:0;filter:blur(10px);transform:scale(.9)}100%{letter-spacing:20px;opacity:1;filter:blur(0);transform:scale(1)}}
+@keyframes lineGrow{0%{width:0;opacity:0}10%{opacity:1}100%{width:180px;opacity:1}}
+#amb{position:fixed;inset:-10%;z-index:-1;opacity:.18;filter:blur(90px) saturate(130%);transition:background 1.2s;pointer-events:none}
+.notch-wrap{display:flex;justify-content:center;position:fixed;top:0;left:0;right:0;z-index:5;pointer-events:none}
+.top-notch{background:var(--glass);backdrop-filter:blur(20px);-webkit-backdrop-filter:blur(20px);border:1px solid var(--border);border-top:none;
+  border-bottom-left-radius:18px;border-bottom-right-radius:18px;padding:8px 24px;display:flex;align-items:center;gap:10px;box-shadow:0 10px 30px rgba(0,0,0,.5)}
+.top-notch span{font-size:13px;font-weight:700;letter-spacing:1.5px;text-transform:uppercase}
+.top-notch i{font-style:normal;font-size:12px;color:var(--muted);font-weight:500}
+#app{flex:1;overflow-y:auto;padding:70px 50px 180px;scroll-behavior:smooth}
+.wrap{max-width:1400px;margin:0 auto}
+.tab{display:none;animation:slideUp .6s cubic-bezier(.16,1,.3,1) forwards}
+.tab.active{display:block}
+@keyframes slideUp{from{opacity:0;transform:translateY(25px)}to{opacity:1;transform:translateY(0)}}
+.sec-head{font-size:22px;font-weight:600;letter-spacing:-.5px;margin:60px 0 25px;display:flex;align-items:center;gap:12px}
+.sec-head::before{content:'';width:4px;height:18px;background:#fff;border-radius:4px}
+.hero{height:460px;border-radius:20px;overflow:hidden;position:relative;cursor:pointer;border:1px solid var(--border);transition:all .5s cubic-bezier(.2,.8,.2,1);box-shadow:0 20px 50px rgba(0,0,0,.5)}
+.hero:hover{transform:translateY(-6px);box-shadow:0 30px 80px rgba(0,0,0,.8);border-color:rgba(255,255,255,.2)}
+.art{position:absolute;inset:0;transition:transform .8s cubic-bezier(.2,.8,.2,1)}
+.hero:hover .art{transform:scale(1.03)}
+.art .em{position:absolute;right:8%;top:50%;transform:translateY(-50%);font-size:220px;filter:drop-shadow(0 20px 40px #0009)}
+.h-over{position:absolute;inset:0;background:linear-gradient(to top,rgba(0,0,0,.95) 0%,rgba(0,0,0,.1) 60%,transparent 100%);display:flex;flex-direction:column;justify-content:flex-end;padding:60px}
+.h-tag{background:rgba(255,255,255,.15);backdrop-filter:blur(10px);border:1px solid rgba(255,255,255,.2);padding:8px 18px;font-size:11px;font-weight:700;border-radius:100px;letter-spacing:1px;margin-bottom:20px;align-self:flex-start;text-transform:uppercase}
+.h-title{font-size:60px;font-weight:800;letter-spacing:-2px;margin:0 0 10px;line-height:1}
+.h-desc{color:#ccc;max-width:560px;line-height:1.5;margin-bottom:26px}
+.btn{background:#fff;color:#000;border:0;padding:14px 34px;border-radius:100px;font-weight:600;font-size:15px;font-family:inherit;cursor:pointer;transition:.3s;align-self:flex-start}
+.btn:hover{transform:scale(1.05);box-shadow:0 10px 30px rgba(255,255,255,.25)}
+.row{display:grid;grid-template-columns:repeat(auto-fill,minmax(300px,1fr));gap:25px}
+.grid-v{display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:25px}
+.c-h,.c-v{position:relative;border-radius:14px;overflow:hidden;cursor:pointer;background:#080808;border:1px solid var(--border);transition:all .4s cubic-bezier(.2,.8,.2,1);outline:none}
+.c-h{aspect-ratio:16/9}.c-v{aspect-ratio:3/4}
+.c-h .art,.c-v .art{opacity:.75;filter:grayscale(20%);transition:.5s}
+.c-h .em,.c-v .em{font-size:84px;right:50%;transform:translate(50%,-60%)}
+.c-h:hover,.c-v:hover,.c-h:focus,.c-v:focus{transform:translateY(-8px);border-color:rgba(255,255,255,.25);box-shadow:0 20px 40px rgba(0,0,0,.8)}
+.c-h:hover .art,.c-v:hover .art,.c-h:focus .art,.c-v:focus .art{opacity:1;transform:scale(1.05);filter:none}
+.c-inf{position:absolute;bottom:0;left:0;width:100%;padding:50px 22px 20px;background:linear-gradient(to top,rgba(0,0,0,.95),transparent)}
+.c-inf b{display:block;font-size:17px}.c-inf small{color:var(--muted)}
+.badge{position:absolute;top:12px;right:12px;font-size:10px;font-weight:700;letter-spacing:1px;background:rgba(0,0,0,.6);border:1px solid var(--border);padding:4px 10px;border-radius:100px}
+.search{margin-bottom:30px;position:relative}
+.search input{width:100%;padding:18px 24px 18px 50px;border-radius:16px;background:rgba(255,255,255,.05);border:1px solid var(--border);color:#fff;font-size:15px;font-family:inherit;outline:none;transition:.3s}
+.search input:focus{background:rgba(255,255,255,.1);border-color:rgba(255,255,255,.3)}
+.search svg{position:absolute;left:18px;top:50%;transform:translateY(-50%);width:20px;height:20px;stroke:#aaa}
+.empty{color:var(--muted);padding:40px 0}
+.panel{background:var(--glass);border:1px solid var(--border);border-radius:20px;padding:30px;backdrop-filter:blur(20px)}
+.panel p{color:#bbb;line-height:1.6}
+.set-row{display:flex;justify-content:space-between;align-items:center;padding:18px 0;border-bottom:1px solid var(--border)}
+.set-row:last-child{border:0}
+.set-row small{display:block;color:var(--muted);margin-top:4px}
+.sw{width:46px;height:26px;border-radius:30px;background:#333;position:relative;cursor:pointer;transition:.3s;flex-shrink:0}
+.sw::after{content:'';position:absolute;top:3px;left:3px;width:20px;height:20px;border-radius:50%;background:#fff;transition:.3s}
+.sw.on{background:#fff}.sw.on::after{left:23px;background:#000}
+.dock-wrap{position:fixed;bottom:35px;left:50%;transform:translateX(-50%);display:flex;align-items:center;gap:15px;z-index:6}
+.dock{background:var(--glass);backdrop-filter:blur(15px);-webkit-backdrop-filter:blur(15px);border:1px solid var(--border);border-radius:80px;display:flex;align-items:center;padding:10px 14px;box-shadow:0 30px 60px rgba(0,0,0,.6)}
+.d-logo{font-size:20px;margin:0 10px}
+.d-sep{width:1px;height:24px;background:var(--border);margin:0 6px}
+.d-btn{padding:10px 26px;border-radius:100px;color:var(--muted);font-size:13px;font-weight:500;cursor:pointer;transition:.3s}
+.d-btn:hover{color:#fff;background:rgba(255,255,255,.05)}
+.d-btn.active{color:#000;background:#fff;font-weight:600;box-shadow:0 4px 12px rgba(255,255,255,.2)}
+.last{background:var(--glass);backdrop-filter:blur(30px);border:1px solid var(--border);border-radius:100px;height:60px;padding:6px 18px 6px 6px;display:none;align-items:center;gap:12px;cursor:pointer;transition:.3s;white-space:nowrap}
+.last:hover{background:var(--glass-hover)}
+.last .dot{width:48px;height:48px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:24px}
+.last small{display:block;color:var(--muted);font-size:10px;text-transform:uppercase;letter-spacing:1px}
+.last strong{font-size:13px}
+#player{position:fixed;inset:0;background:#000;z-index:50;display:none;flex-direction:column;animation:fadeIn .3s}
+@keyframes fadeIn{from{opacity:0}to{opacity:1}}
+.p-bar{display:flex;gap:10px;align-items:center;padding:10px 16px;background:rgba(22,22,25,.95);border-bottom:1px solid var(--border)}
+.p-bar .t{font-weight:700;letter-spacing:1px;text-transform:uppercase;font-size:13px;margin-right:auto}
+.pill{background:rgba(255,255,255,.1);color:#fff;border:1px solid var(--border);padding:8px 18px;border-radius:100px;font-weight:500;font-size:13px;font-family:inherit;cursor:pointer}
+.pill:hover{background:rgba(255,255,255,.2)}
+.pill.w{background:#fff;color:#000}
+#stage{flex:1;display:flex;align-items:center;justify-content:center;overflow:hidden}
+#stage iframe{width:100%;height:100%;border:0;background:#000}
+#stage ruffle-player{width:min(100%,960px);height:min(100%,720px)}
+.msg{color:#bbb;text-align:center;max-width:520px;line-height:1.6;padding:20px}
+input[type=file]{display:none}
+@media (max-width:700px){
+  #app{padding:60px 18px 160px}.hero{height:360px}.h-over{padding:28px}.h-title{font-size:38px}.art .em{font-size:140px;right:4%}
+  .d-btn{padding:9px 14px}.grid-v{grid-template-columns:repeat(auto-fill,minmax(140px,1fr));gap:14px}.last{display:none!important}
+}
 </style>
 </head>
 <body>
-<header>
-  <h1>🎮 GAME LAUNCHER</h1>
-  <div class="sub">Click a game to play · ✕ Back (or Esc) to return</div>
-</header>
-<div class="grid" id="grid"></div>
-<footer>Everything runs from this folder — just double-click index.html.</footer>
+<div id="boot"><div class="fig-title">Launcher</div><div class="fig-line"></div></div>
+<div id="amb"></div>
+<div class="notch-wrap"><div class="top-notch"><span>🎮 Launcher</span><i id="clock"></i></div></div>
+
+<div id="app">
+  <div class="tab active" id="t-home"><div class="wrap">
+    <div class="hero" id="hero"></div>
+    <div class="sec-head">Your Games</div>
+    <div class="row" id="home-row"></div>
+    <div class="sec-head">Recently Played</div>
+    <div class="row" id="recent-row"></div>
+  </div></div>
+
+  <div class="tab" id="t-lib"><div class="wrap">
+    <div class="search">
+      <svg viewBox="0 0 24 24" fill="none" stroke-width="2"><circle cx="11" cy="11" r="7"/><path d="M20 20l-4-4"/></svg>
+      <input id="q" placeholder="Search your games…" autocomplete="off">
+    </div>
+    <div class="grid-v" id="lib"></div>
+  </div></div>
+
+  <div class="tab" id="t-swf"><div class="wrap">
+    <div class="sec-head" style="margin-top:20px">Flash Player</div>
+    <div class="panel">
+      <p>Play any <b>.swf</b> Flash game you have on your computer. It runs with Ruffle, a free Flash emulator that downloads from the internet the first time you use it.</p>
+      <label class="btn" style="display:inline-block">Open .swf file…<input type="file" id="file" accept=".swf"></label>
+    </div>
+  </div></div>
+
+  <div class="tab" id="t-set"><div class="wrap">
+    <div class="sec-head" style="margin-top:20px">Settings</div>
+    <div class="panel">
+      <div class="set-row"><div>Boot animation<small>Show the intro when the launcher opens</small></div><div class="sw" data-k="boot"></div></div>
+      <div class="set-row"><div>Ambient glow<small>Tint the background to match the selected game</small></div><div class="sw" data-k="amb"></div></div>
+      <div class="set-row"><div>Open games fullscreen<small>Go fullscreen automatically when a game starts</small></div><div class="sw" data-k="fs"></div></div>
+      <div class="set-row"><div>Recently played<small>Clear your play history</small></div><button class="pill" id="clr">Clear</button></div>
+    </div>
+  </div></div>
+</div>
+
+<div class="dock-wrap">
+  <div class="dock">
+    <div class="d-logo">🎮</div><div class="d-sep"></div>
+    <div class="d-btn active" data-t="home">Home</div>
+    <div class="d-btn" data-t="lib">Library</div>
+    <div class="d-btn" data-t="swf">Flash</div>
+    <div class="d-btn" data-t="set">Settings</div>
+  </div>
+  <div class="last" id="last"><div class="dot" id="last-dot"></div><div><small>Last Played</small><strong id="last-nm"></strong></div></div>
+</div>
 
 <div id="player">
-  <div id="bar">
-    <span id="title"></span>
-    <label id="pick" style="display:none">Open .swf…<input type="file" id="file" accept=".swf"></label>
-    <button id="full">Fullscreen</button>
-    <button class="x" id="close">✕ Back</button>
-  </div>
+  <div class="p-bar"><span class="t" id="p-title"></span>
+    <button class="pill" id="p-full">⛶ Fullscreen</button><button class="pill w" id="p-close">✕ Back</button></div>
   <div id="stage"></div>
 </div>
 
 <script>
+/* ===== Your games: add new ones here ===== */
 var GAMES = [
-  {name:"Plants vs Zombies DS", dir:"Plants vs Zombies DS", ico:"🌻", col:"#3c8d2f,#1d4d16", note:"Lawn defense"},
-  {name:"Sonic",                dir:"Sonic",                ico:"💨", col:"#2f62d9,#14286b", note:"Green Hill · Acts 1–3", tag:"BETA"},
-  {name:"Flappy Birds",         dir:"Flappy Birds",         ico:"🐤", col:"#4ec0ca,#1f7f88", note:"Tap to flap"},
-  {name:"Minecraft Pocket Edition", dir:"Minecraft Pocket Edition", ico:"⛏️", col:"#7a5a3a,#3b2a1a", note:"Survival & Creative"},
-  {name:"SWF Player",           swf:true,                   ico:"⚡", col:"#c0392b,#5e1a12", note:"Play any .swf file you have"}
+  {n:"Plants vs Zombies DS", dir:"Plants vs Zombies DS", em:"🌻", c:["#3c8d2f","#0d2a09"], tag:"Strategy",
+   d:"Plant your defenses, collect sun and hold the lawn against wave after wave."},
+  {n:"Sonic", dir:"Sonic", em:"💨", c:["#2f62d9","#0a1640"], tag:"Platformer", beta:true,
+   d:"High-speed platforming across three acts of rolling hills."},
+  {n:"Flappy Birds", dir:"Flappy Birds", em:"🐤", c:["#4ec0ca","#0f4a50"], tag:"Arcade",
+   d:"Tap to flap through the pipes. How far can you get?"},
+  {n:"Minecraft Pocket Edition", dir:"Minecraft Pocket Edition", em:"⛏️", c:["#7a5a3a","#1e150c"], tag:"Sandbox",
+   d:"Mine, build and survive in a blocky world, or go wild in Creative."}
 ];
 
-var grid=document.getElementById('grid'), player=document.getElementById('player'),
-    stage=document.getElementById('stage'), title=document.getElementById('title'),
-    pick=document.getElementById('pick'), file=document.getElementById('file');
+function ld(k,d){try{var v=localStorage.getItem('gl_'+k);return v==null?d:JSON.parse(v)}catch(e){return d}}
+function sv(k,v){try{localStorage.setItem('gl_'+k,JSON.stringify(v))}catch(e){}}
+var S=ld('set',{boot:true,amb:true,fs:false}), recent=ld('recent',[]);
 
-GAMES.forEach(function(g){
-  var t=document.createElement('div'); t.className='tile'; t.tabIndex=0;
-  t.style.background='linear-gradient(160deg,'+g.col+')';
-  t.innerHTML='<div class="ico">'+g.ico+'</div>'+(g.tag?'<div class="tag">'+g.tag+'</div>':'')+
-    '<b>'+g.name+'</b><span>'+g.note+'</span>';
-  t.onclick=function(){ open(g); };
-  t.onkeydown=function(e){ if(e.key==='Enter') open(g); };
-  grid.appendChild(t);
+var boot=document.getElementById('boot');
+if(!S.boot) boot.remove(); else setTimeout(function(){boot.style.opacity=0;setTimeout(function(){boot.remove()},600)},2100);
+
+function tick(){document.getElementById('clock').textContent=new Date().toLocaleTimeString([],{hour:'numeric',minute:'2-digit'})}
+tick(); setInterval(tick,15000);
+
+function grad(g){return 'radial-gradient(circle at 75% 40%,'+g.c[0]+','+g.c[1]+' 70%)'}
+function art(g){return '<div class="art" style="background:'+grad(g)+'"><div class="em">'+g.em+'</div></div>'}
+function amb(g){document.getElementById('amb').style.background=(S.amb&&g)?grad(g):'none'}
+function find(n){for(var i=0;i<GAMES.length;i++) if(GAMES[i].n===n) return GAMES[i]}
+
+function card(g,cls){
+  var el=document.createElement('div'); el.className=cls; el.tabIndex=0;
+  el.innerHTML=art(g)+(g.beta?'<div class="badge">BETA</div>':'')+'<div class="c-inf"><b>'+g.n+'</b><small>'+g.tag+'</small></div>';
+  el.onclick=function(){launch(g)}; el.onkeydown=function(e){if(e.key==='Enter')launch(g)};
+  el.onmouseenter=el.onfocus=function(){amb(g)};
+  return el;
+}
+
+var feat=find(recent[0])||GAMES[0];
+function renderHero(){
+  var h=document.getElementById('hero');
+  h.innerHTML=art(feat)+'<div class="h-over"><div class="h-tag">'+(recent[0]?'Continue Playing':'Featured')+(feat.beta?' · Beta':'')+'</div>'+
+    '<h1 class="h-title">'+feat.n+'</h1><div class="h-desc">'+feat.d+'</div><button class="btn">▶ Play</button></div>';
+  h.onclick=function(){launch(feat)}; amb(feat);
+}
+function renderRows(){
+  var r=document.getElementById('home-row'); r.innerHTML='';
+  GAMES.forEach(function(g){r.appendChild(card(g,'c-h'))});
+  var rr=document.getElementById('recent-row'); rr.innerHTML='';
+  var list=recent.map(find).filter(Boolean);
+  if(!list.length) rr.innerHTML='<div class="empty">Nothing yet. Pick a game to get started!</div>';
+  list.forEach(function(g){rr.appendChild(card(g,'c-h'))});
+  var l=document.getElementById('last'), g=list[0];
+  if(g){l.style.display='flex';var d=document.getElementById('last-dot');d.style.background=grad(g);d.textContent=g.em;
+    document.getElementById('last-nm').textContent=g.n;l.onclick=function(){launch(g)}}
+  else l.style.display='none';
+}
+function renderLib(){
+  var q=document.getElementById('q').value.toLowerCase(), L=document.getElementById('lib'); L.innerHTML='';
+  var m=GAMES.filter(function(g){return (g.n+' '+g.tag).toLowerCase().indexOf(q)>=0});
+  if(!m.length) L.innerHTML='<div class="empty">No games match “'+q.replace(/</g,'&lt;')+'”.</div>';
+  m.forEach(function(g){L.appendChild(card(g,'c-v'))});
+}
+document.getElementById('q').oninput=renderLib;
+
+var btns=document.querySelectorAll('.d-btn');
+btns.forEach(function(b){b.onclick=function(){
+  btns.forEach(function(x){x.classList.toggle('active',x===b)});
+  document.querySelectorAll('.tab').forEach(function(t){t.classList.toggle('active',t.id==='t-'+b.dataset.t)});
+  document.getElementById('app').scrollTop=0; if(b.dataset.t==='lib') document.getElementById('q').focus();
+}});
+
+document.querySelectorAll('.sw').forEach(function(s){
+  s.classList.toggle('on',!!S[s.dataset.k]);
+  s.onclick=function(){S[s.dataset.k]=!S[s.dataset.k];s.classList.toggle('on',S[s.dataset.k]);sv('set',S);amb(feat)};
 });
+document.getElementById('clr').onclick=function(){recent=[];sv('recent',recent);feat=GAMES[0];renderHero();renderRows()};
 
-function open(g){
-  stage.innerHTML=''; title.textContent=g.name; player.style.display='flex';
-  if(g.swf){ pick.style.display=''; swfIntro(); return; }
-  pick.style.display='none';
-  var f=document.createElement('iframe');
-  f.src=encodeURI(g.dir)+'/index.html'; f.allow='autoplay; fullscreen';
-  f.onload=function(){ try{ f.contentWindow.addEventListener('keydown',function(e){ if(e.key==='Escape'&&!document.fullscreenElement) close(); }); }catch(e){} };
-  stage.appendChild(f); setTimeout(function(){ try{f.focus();}catch(e){} },100);
+var player=document.getElementById('player'), stage=document.getElementById('stage');
+function show(t){document.getElementById('p-title').textContent=t;player.style.display='flex';stage.innerHTML=''}
+function launch(g){
+  recent=[g.n].concat(recent.filter(function(x){return x!==g.n})).slice(0,6); sv('recent',recent);
+  show(g.n);
+  var f=document.createElement('iframe'); f.src=encodeURI(g.dir)+'/index.html'; f.allow='autoplay; fullscreen; gamepad';
+  f.onload=function(){try{f.contentWindow.addEventListener('keydown',function(e){if(e.key==='Escape'&&!document.fullscreenElement)close()})}catch(e){}};
+  stage.appendChild(f); setTimeout(function(){try{f.focus()}catch(e){}},100);
+  if(S.fs) full();
 }
-function close(){ player.style.display='none'; stage.innerHTML=''; }
-document.getElementById('close').onclick=close;
-document.getElementById('full').onclick=function(){
-  var el=stage.firstElementChild||stage; (el.requestFullscreen||el.webkitRequestFullscreen||function(){}).call(el);
-};
-addEventListener('keydown',function(e){ if(e.key==='Escape'&&player.style.display==='flex'&&!document.fullscreenElement) close(); });
+function close(){player.style.display='none';stage.innerHTML='';if(document.fullscreenElement)document.exitFullscreen();feat=find(recent[0])||GAMES[0];renderHero();renderRows()}
+function full(){var el=stage.firstElementChild||stage;(el.requestFullscreen||el.webkitRequestFullscreen||function(){}).call(el)}
+document.getElementById('p-close').onclick=close;
+document.getElementById('p-full').onclick=full;
+addEventListener('keydown',function(e){if(e.key==='Escape'&&player.style.display==='flex'&&!document.fullscreenElement)close()});
 
-/* ---------- SWF player (uses the Ruffle Flash emulator) ---------- */
-var ruffleReady=null;
+var ruffle=null;
 function loadRuffle(){
-  if(ruffleReady) return ruffleReady;
-  ruffleReady=new Promise(function(res,rej){
-    var s=document.createElement('script');
-    s.src='https://unpkg.com/@ruffle-rs/ruffle';
-    s.onload=function(){ res(); }; s.onerror=function(){ ruffleReady=null; rej(); };
-    document.head.appendChild(s);
-  });
-  return ruffleReady;
+  if(ruffle) return ruffle;
+  return ruffle=new Promise(function(res,rej){var s=document.createElement('script');s.src='https://unpkg.com/@ruffle-rs/ruffle';
+    s.onload=res;s.onerror=function(){ruffle=null;rej()};document.head.appendChild(s)});
 }
-function swfIntro(){
-  stage.innerHTML='<div id="msg">Click <b>Open .swf…</b> above and pick a Flash game file from your computer.'+
-    '<br><br>Flash is played with the free Ruffle emulator, which loads from the internet the first time.</div>';
-}
+var file=document.getElementById('file');
 file.onchange=function(){
-  var f=file.files[0]; if(!f) return;
-  title.textContent='SWF Player — '+f.name;
-  stage.innerHTML='<div id="msg">Loading Flash player…</div>';
-  Promise.all([loadRuffle(), f.arrayBuffer()]).then(function(r){
-    var ruffle=window.RufflePlayer.newest(), p=ruffle.createPlayer();
-    stage.innerHTML=''; stage.appendChild(p);
-    p.load({data:r[1], autoplay:'on', unmuteOverlay:'hidden', letterbox:'on'});
-  }).catch(function(){
-    stage.innerHTML='<div id="msg">Couldn\'t load the Flash player. Check your internet connection and try again.</div>';
-  });
-  file.value='';
+  var f=file.files[0]; if(!f) return; file.value='';
+  show('Flash · '+f.name); stage.innerHTML='<div class="msg">Loading Flash player…</div>';
+  Promise.all([loadRuffle(),f.arrayBuffer()]).then(function(r){
+    var p=window.RufflePlayer.newest().createPlayer(); stage.innerHTML=''; stage.appendChild(p);
+    p.load({data:r[1],autoplay:'on',unmuteOverlay:'hidden',letterbox:'on'});
+  }).catch(function(){stage.innerHTML='<div class="msg">Couldn’t load the Flash player. Check your internet connection and try again.</div>'});
 };
+
+renderHero(); renderRows(); renderLib();
 </script>
 </body>
 </html>
