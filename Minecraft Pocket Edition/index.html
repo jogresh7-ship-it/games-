@@ -5,215 +5,230 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no" />
 <title>Minecraft: Pocket Edition (Fan Prototype)</title>
 <style>
-  html, body { margin: 0; height: 100%; overflow: hidden; background: #000; touch-action: none; user-select: none; -webkit-user-select: none; font-family: "Courier New", monospace; }
-  canvas { display: block; width: 100vw; height: 100vh; }
-  #ui { position: fixed; inset: 0; pointer-events: none; }
-  #ui canvas { image-rendering: pixelated; }
-  .menu { position: fixed; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 14px; background: rgba(0,0,0,.35); }
-  .menu.hidden { display: none; }
-  .menu img.logo { width: min(80vw, 520px); image-rendering: pixelated; margin-bottom: 24px; }
-  .btn { pointer-events: auto; min-width: 260px; padding: 12px 24px; font: bold 22px "Courier New", monospace; color: #e0e0e0; text-shadow: 2px 2px #3f3f3f;
-         background: linear-gradient(#8d8182, #6f6365); border: 3px solid #2b2526; box-shadow: inset 2px 2px #a99d9e, inset -2px -2px #4a4041; cursor: pointer; }
-  .btn:hover { color: #ffffa0; background: linear-gradient(#5d5052, #3f3536); }
-  .hint { color: #ddd; font-size: 14px; text-shadow: 1px 1px #000; text-align: center; max-width: 90vw; }
-  #touch { position: fixed; inset: 0; display: none; pointer-events: none; }
-  body.touch #touch { display: block; }
-  .tb { position: absolute; width: 58px; height: 58px; pointer-events: auto; background: rgba(120,120,120,.55); border: 3px solid rgba(40,40,40,.8); color: #fff; font: bold 22px sans-serif; display: flex; align-items: center; justify-content: center; }
-  #tu { left: 74px; bottom: 140px; } #td { left: 74px; bottom: 16px; } #tl { left: 12px; bottom: 78px; } #tr { left: 136px; bottom: 78px; }
-  #tj { left: 74px; bottom: 78px; } #tbk { right: 16px; bottom: 120px; width: 70px; } #tpl { right: 16px; bottom: 44px; width: 70px; } #tfl { right: 100px; bottom: 44px; }
+  html, body { margin: 0; height: 100%; overflow: hidden; background: #000; touch-action: none; user-select: none; -webkit-user-select: none; }
+  canvas { display: block; position: fixed; inset: 0; width: 100vw; height: 100vh; }
+  #hud { image-rendering: pixelated; }
+  .field { position: fixed; display: none; background: #000; color: #e0e0e0; border: 2px solid #a0a0a0; font: 16px monospace; padding: 0 6px; outline: none; box-sizing: border-box; }
+  .field:focus { border-color: #fff; }
 </style>
 </head>
 <body>
 <canvas id="gl"></canvas>
-<div id="ui"><canvas id="hud"></canvas></div>
-<div class="menu" id="title">
-  <img class="logo" id="logoImg" alt="Minecraft: Pocket Edition" />
-  <button class="btn" id="bCreative">Creative</button>
-  <button class="btn" id="bSurvival">Survival</button>
-  <div class="hint">WASD move · mouse look · left click break · right click place · 1-9 / wheel pick block · Space jump (double-tap to fly in Creative) · Shift sneak/down · Esc pause</div>
-</div>
-<div class="menu hidden" id="pause">
-  <button class="btn" id="bResume">Back to game</button>
-  <button class="btn" id="bQuit">Main menu</button>
-</div>
-<div id="touch">
-  <div class="tb" id="tu">▲</div><div class="tb" id="td">▼</div><div class="tb" id="tl">◀</div><div class="tb" id="tr">▶</div>
-  <div class="tb" id="tj">⤒</div><div class="tb" id="tbk">BREAK</div><div class="tb" id="tpl">PLACE</div><div class="tb" id="tfl">FLY</div>
-</div>
+<canvas id="hud"></canvas>
+<input class="field" id="fName" maxlength="24" autocomplete="off" spellcheck="false" />
+<input class="field" id="fSeed" maxlength="18" autocomplete="off" spellcheck="false" />
 <script src="assets.js"></script>
 <script>
 (() => {
 "use strict";
 const A = window.MC_ASSETS;
-document.getElementById("logoImg").src = A.logo;
+const img = (src) => { const i = new Image(); i.src = src; return i; };
+const IM = { terrain: img(A.terrain), gui: img(A.gui), font: img(A.font), logo: img(A.logo), mojang: img(A.mojang) };
 
-// ---------- blocks: [top, side, bottom] tile = row*16+col in the atlas ----------
+// ============================== blocks ==============================
 const T = (r, c) => r * 16 + c;
-const B = {
-  AIR: 0, GRASS: 1, DIRT: 2, STONE: 3, COBBLE: 4, PLANKS: 5, LOG: 6, LEAVES: 7, SAND: 8, GRAVEL: 9, GLASS: 10,
-  BRICK: 11, BEDROCK: 12, WATER: 13, COAL: 14, IRON: 15, GOLD: 16, DIAMOND: 17, WOOL: 18, BOOKSHELF: 19, OBSIDIAN: 20, STONEBRICK: 21, SNOW: 22, CACTUS: 23, MOSSY: 24, GOLDBLOCK: 25, DIAMONDBLOCK: 26,
-};
-const FACES = {
-  1: [T(0, 0), T(0, 3), T(0, 2)], 2: [T(0, 2)], 3: [T(0, 1)], 4: [T(1, 0)], 5: [T(0, 4)], 6: [T(1, 5), T(1, 4), T(1, 5)],
-  7: [T(3, 4)], 8: [T(1, 2)], 9: [T(1, 3)], 10: [T(3, 1)], 11: [T(0, 7)], 12: [T(1, 1)], 13: [T(12, 13)], 14: [T(2, 2)],
-  15: [T(2, 1)], 16: [T(2, 0)], 17: [T(3, 2)], 18: [T(4, 0)], 19: [T(0, 4), T(2, 3), T(0, 4)], 20: [T(2, 5)], 21: [T(3, 6)],
-  22: [T(4, 2), T(4, 4), T(0, 2)], 23: [T(4, 5), T(4, 6), T(4, 7)], 24: [T(2, 4)], 25: [T(1, 7)], 26: [T(1, 8)],
-};
-const tileOf = (id, face) => { const f = FACES[id]; return face === 0 ? f[0] : face === 1 ? (f[2] ?? f[0]) : (f[1] ?? f[0]); };
-const TRANSPARENT = new Set([B.AIR, B.GLASS, B.LEAVES, B.WATER]);
+const B = { AIR: 0, GRASS: 1, DIRT: 2, STONE: 3, COBBLE: 4, PLANKS: 5, LOG: 6, LEAVES: 7, SAND: 8, GRAVEL: 9, GLASS: 10, BRICK: 11, BEDROCK: 12, WATER: 13,
+  COAL: 14, IRON: 15, GOLD: 16, DIAMOND: 17, WOOL: 18, BOOKSHELF: 19, OBSIDIAN: 20, STONEBRICK: 21, SNOW: 22, CACTUS: 23, MOSSY: 24, GOLDBLOCK: 25, DIAMONDBLOCK: 26,
+  IRONBLOCK: 27, SANDSTONE: 28, CLAY: 29, TNT: 30, CRAFTING: 31, FURNACE: 32, LAPIS: 33, LAPISBLOCK: 34, ICE: 35, MELON: 36, PUMPKIN: 37, NETHERRACK: 38, GLOWSTONE: 39,
+  WOOL_RED: 40, WOOL_ORANGE: 41, WOOL_YELLOW: 42, WOOL_LIME: 43, WOOL_GREEN: 44, WOOL_LBLUE: 45, WOOL_BLUE: 46, WOOL_PURPLE: 47, WOOL_PINK: 48, WOOL_BLACK: 49 };
+const NAMES = { 1: "Grass", 2: "Dirt", 3: "Stone", 4: "Cobblestone", 5: "Wooden Planks", 6: "Wood", 7: "Leaves", 8: "Sand", 9: "Gravel", 10: "Glass", 11: "Bricks", 12: "Bedrock", 13: "Water",
+  14: "Coal Ore", 15: "Iron Ore", 16: "Gold Ore", 17: "Diamond Ore", 18: "Wool", 19: "Bookshelf", 20: "Obsidian", 21: "Stone Bricks", 22: "Snow", 23: "Cactus", 24: "Moss Stone",
+  25: "Block of Gold", 26: "Block of Diamond", 27: "Block of Iron", 28: "Sandstone", 29: "Clay", 30: "TNT", 31: "Crafting Table", 32: "Furnace", 33: "Lapis Lazuli Ore", 34: "Lapis Lazuli Block",
+  35: "Ice", 36: "Melon", 37: "Pumpkin", 38: "Netherrack", 39: "Glowstone", 40: "Red Wool", 41: "Orange Wool", 42: "Yellow Wool", 43: "Lime Wool", 44: "Green Wool", 45: "Light Blue Wool",
+  46: "Blue Wool", 47: "Purple Wool", 48: "Pink Wool", 49: "Black Wool" };
+// [top, side, bottom]; one entry = all faces
+const FACES = { 1: [T(0, 0), T(0, 3), T(0, 2)], 2: [T(0, 2)], 3: [T(0, 1)], 4: [T(1, 0)], 5: [T(0, 4)], 6: [T(1, 5), T(1, 4), T(1, 5)], 7: [T(3, 4)], 8: [T(1, 2)], 9: [T(1, 3)],
+  10: [T(3, 1)], 11: [T(0, 7)], 12: [T(1, 1)], 13: [T(12, 13)], 14: [T(2, 2)], 15: [T(2, 1)], 16: [T(2, 0)], 17: [T(3, 2)], 18: [T(4, 0)], 19: [T(0, 4), T(2, 3), T(0, 4)],
+  20: [T(2, 5)], 21: [T(3, 6)], 22: [T(4, 2), T(4, 4), T(0, 2)], 23: [T(4, 5), T(4, 6), T(4, 7)], 24: [T(2, 4)], 25: [T(1, 7)], 26: [T(1, 8)], 27: [T(1, 6)],
+  28: [T(11, 0), T(12, 0), T(13, 0)], 29: [T(4, 8)], 30: [T(0, 9), T(0, 8), T(0, 10)], 31: [T(2, 11), T(3, 11), T(0, 4)], 32: [T(3, 14), T(2, 12), T(3, 14)],
+  33: [T(10, 0)], 34: [T(9, 0)], 35: [T(4, 3)], 36: [T(8, 9), T(8, 8), T(8, 9)], 37: [T(6, 6), T(7, 6), T(6, 6)], 38: [T(6, 7)], 39: [T(6, 9)],
+  40: [T(8, 1)], 41: [T(13, 2)], 42: [T(10, 2)], 43: [T(10, 2)], 44: [T(9, 1)], 45: [T(11, 2)], 46: [T(11, 1)], 47: [T(12, 1)], 48: [T(8, 2)], 49: [T(7, 1)] };
+const tileOf = (id, face) => { const f = FACES[id] || FACES[3]; return face === 0 ? f[0] : face === 1 ? (f[2] ?? f[0]) : (f[1] ?? f[0]); };
+const SEE_THROUGH = new Set([B.AIR, B.GLASS, B.LEAVES, B.WATER, B.ICE]);
 const SOLID = (id) => id !== B.AIR && id !== B.WATER;
-const TINT_GREEN = new Set([T(0, 0), T(3, 4)]);     // grayscale grass top / leaves get tinted green
-const HOTBAR = [B.GRASS, B.DIRT, B.STONE, B.COBBLE, B.PLANKS, B.LOG, B.GLASS, B.BRICK, B.SAND, B.LEAVES, B.WOOL, B.BOOKSHELF, B.STONEBRICK, B.OBSIDIAN, B.GOLDBLOCK, B.DIAMONDBLOCK, B.GRAVEL, B.SNOW, B.MOSSY];
+const TINT = new Set([T(0, 0), T(3, 4)]);
+const HARD = { 1: 0.6, 2: 0.5, 3: 1.5, 4: 2, 5: 2, 6: 2, 7: 0.2, 8: 0.5, 9: 0.6, 10: 0.3, 11: 2, 12: 1e9, 14: 3, 15: 3, 16: 3, 17: 3, 18: 0.8, 19: 1.5, 20: 10, 22: 0.2, 23: 0.4, 35: 0.5, 39: 0.3, 30: 0.1 };
+const DROP = { 1: 2, 3: 4, 7: 0, 10: 0, 35: 0, 22: 0 };
+const CREATIVE_LIST = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 14, 15, 16, 17, 18, 40, 41, 42, 43, 44, 45, 46, 47, 48, 49, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31, 32, 33, 34, 35, 36, 37, 38, 39];
+const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
+const lerp = (a, b, t) => a + (b - a) * t;
 
-// ---------- world ----------
-const SX = 128, SZ = 128, SY = 48, CH = 16;
+// ============================== world ==============================
+const SX = 128, SZ = 128, SY = 64, CH = 16, SEA = 22;
 let world = new Uint8Array(SX * SY * SZ);
 const idx = (x, y, z) => (y * SZ + z) * SX + x;
-function get(x, y, z) { if (x < 0 || z < 0 || x >= SX || z >= SZ || y < 0) return B.BEDROCK; if (y >= SY) return B.AIR; return world[idx(x, y, z)]; }
+function get(x, y, z) { if (x < 0 || z < 0 || x >= SX || z >= SZ) return B.AIR; if (y < 0) return B.BEDROCK; if (y >= SY) return B.AIR; return world[idx(x, y, z)]; }
 function set(x, y, z, v) { if (x < 0 || z < 0 || x >= SX || z >= SZ || y < 0 || y >= SY) return; world[idx(x, y, z)] = v; markDirty(x, z); }
-
-let seed = 1;
-const rand = () => (seed = (seed * 16807) % 2147483647) / 2147483647;
-function makeNoise(s) {
-  seed = s; const p = new Uint8Array(512); const perm = [...Array(256).keys()];
+let rs = 1;
+const rand = () => (rs = (rs * 16807) % 2147483647) / 2147483647;
+function noise2(s) {
+  rs = s; const p = new Uint8Array(512), perm = [...Array(256).keys()];
   for (let i = 255; i > 0; i--) { const j = Math.floor(rand() * (i + 1)); [perm[i], perm[j]] = [perm[j], perm[i]]; }
   for (let i = 0; i < 512; i++) p[i] = perm[i & 255];
-  const fade = (t) => t * t * t * (t * (t * 6 - 15) + 10);
-  const grad = (h, x, y) => ((h & 1) ? -x : x) + ((h & 2) ? -y : y);
-  return (x, y) => {
-    const X = Math.floor(x) & 255, Y = Math.floor(y) & 255; x -= Math.floor(x); y -= Math.floor(y);
-    const u = fade(x), v = fade(y), a = p[X] + Y, b = p[X + 1] + Y;
-    const l = (t, a1, b1) => a1 + t * (b1 - a1);
-    return l(v, l(u, grad(p[a], x, y), grad(p[b], x - 1, y)), l(u, grad(p[a + 1], x, y - 1), grad(p[b + 1], x - 1, y - 1)));
-  };
+  const fade = (t) => t * t * t * (t * (t * 6 - 15) + 10), g = (h, x, y) => ((h & 1) ? -x : x) + ((h & 2) ? -y : y);
+  return (x, y) => { const X = Math.floor(x) & 255, Y = Math.floor(y) & 255; x -= Math.floor(x); y -= Math.floor(y);
+    const u = fade(x), v = fade(y), a = p[X] + Y, b = p[X + 1] + Y, l = (t, a1, b1) => a1 + t * (b1 - a1);
+    return l(v, l(u, g(p[a], x, y), g(p[b], x - 1, y)), l(u, g(p[a + 1], x, y - 1), g(p[b + 1], x - 1, y - 1))); };
 }
+function seedNum(str) { if (/^-?\d+$/.test(str)) return Math.abs(+str) % 2147483646 + 1; let h = 7; for (const c of str) h = (h * 31 + c.charCodeAt(0)) % 2147483646; return h + 1; }
 function generate(s) {
   world = new Uint8Array(SX * SY * SZ);
-  const n1 = makeNoise(s), n2 = makeNoise(s + 99), n3 = makeNoise(s + 7);
-  seed = s * 31 + 5;
+  const n1 = noise2(s), n2 = noise2(s + 99), n3 = noise2(s + 7), n4 = noise2(s + 1234);
+  rs = s * 31 + 5;
+  const heights = new Int16Array(SX * SZ);
   for (let x = 0; x < SX; x++) for (let z = 0; z < SZ; z++) {
-    const h0 = 18 + n1(x / 40, z / 40) * 10 + n2(x / 14, z / 14) * 4 + Math.max(0, n3(x / 60, z / 60)) * 14;
-    const h = Math.max(4, Math.min(SY - 6, Math.floor(h0)));
-    const beach = h <= 17;
+    // fade to ocean near the edges, like the PE world border
+    const ex = Math.min(x, SX - 1 - x), ez = Math.min(z, SZ - 1 - z), edge = Math.min(1, Math.min(ex, ez) / 10);
+    const h0 = SEA + 2 + n1(x / 45, z / 45) * 11 + n2(x / 15, z / 15) * 4 + Math.max(0, n3(x / 70, z / 70)) * 20;
+    const h = Math.max(3, Math.min(SY - 8, Math.floor(lerp(SEA - 6, h0, edge))));
+    heights[x * SZ + z] = h;
+    const desert = n4(x / 60, z / 60) > 0.25;
+    const beach = h <= SEA + 1;
     for (let y = 0; y <= h; y++) {
       let b = B.STONE;
-      if (y === 0) b = B.BEDROCK;
-      else if (y === h) b = beach ? B.SAND : h > 34 ? B.SNOW : B.GRASS;
-      else if (y > h - 4) b = beach ? B.SAND : B.DIRT;
-      else {
-        const r = rand();
-        if (r < 0.012) b = B.COAL; else if (r < 0.018 && y < 20) b = B.IRON; else if (r < 0.0205 && y < 12) b = B.GOLD; else if (r < 0.022 && y < 8) b = B.DIAMOND;
-      }
+      if (y === 0 || (y === 1 && rand() < 0.5)) b = B.BEDROCK;
+      else if (y === h) b = beach || desert ? B.SAND : h > SEA + 22 ? B.SNOW : B.GRASS;
+      else if (y > h - 4) b = beach || desert ? (y > h - 3 ? B.SAND : B.SANDSTONE) : B.DIRT;
+      else { const r = rand();
+        if (r < 0.014) b = B.COAL; else if (r < 0.021 && y < 34) b = B.IRON; else if (r < 0.0235 && y < 20) b = B.GOLD; else if (r < 0.025 && y < 16) b = B.LAPIS; else if (r < 0.0262 && y < 13) b = B.DIAMOND;
+        else if (r < 0.034) b = B.GRAVEL; else if (r < 0.036 && y > h - 10) b = B.CLAY; }
       world[idx(x, y, z)] = b;
     }
-    for (let y = h + 1; y <= 16; y++) world[idx(x, y, z)] = B.WATER;
+    for (let y = h + 1; y <= SEA; y++) world[idx(x, y, z)] = B.WATER;
+    if (h < SEA - 1 && world[idx(x, h, z)] === B.GRASS) world[idx(x, h, z)] = rand() < 0.5 ? B.SAND : B.DIRT;
   }
-  // caves: random worms
-  for (let w = 0; w < 26; w++) {
-    let x = rand() * SX, y = 6 + rand() * 18, z = rand() * SZ, a = rand() * 6.28, b2 = 0;
-    for (let i = 0; i < 90; i++) {
-      a += (rand() - 0.5) * 0.6; b2 = Math.max(-0.4, Math.min(0.4, b2 + (rand() - 0.5) * 0.2));
-      x += Math.cos(a); z += Math.sin(a); y += b2;
-      const r = 1.6 + rand() * 1.2;
+  for (let w = 0; w < 34; w++) {
+    let x = rand() * SX, y = 8 + rand() * 24, z = rand() * SZ, a = rand() * 6.28, b2 = 0;
+    for (let i = 0; i < 100; i++) {
+      a += (rand() - 0.5) * 0.6; b2 = clamp(b2 + (rand() - 0.5) * 0.2, -0.4, 0.4); x += Math.cos(a); z += Math.sin(a); y += b2;
+      const r = 1.5 + rand() * 1.4;
       for (let dx = -3; dx <= 3; dx++) for (let dy = -3; dy <= 3; dy++) for (let dz = -3; dz <= 3; dz++) {
         if (dx * dx + dy * dy + dz * dz > r * r) continue;
         const X = Math.floor(x + dx), Y = Math.floor(y + dy), Z = Math.floor(z + dz);
-        if (Y > 1 && Y < SY - 3 && X >= 0 && Z >= 0 && X < SX && Z < SZ && world[idx(X, Y, Z)] !== B.WATER && world[idx(X, Y + 1, Z)] !== B.WATER && world[idx(X, Y + 2, Z)] !== B.WATER && world[idx(X, Y + 3, Z)] !== B.WATER) world[idx(X, Y, Z)] = B.AIR;
+        if (Y > 1 && Y < SY - 4 && X >= 0 && Z >= 0 && X < SX && Z < SZ) {
+          const near = [0, 1, 2, 3].some((k) => world[idx(X, Y + k, Z)] === B.WATER);
+          if (!near && world[idx(X, Y, Z)] !== B.BEDROCK) world[idx(X, Y, Z)] = B.AIR;
+        }
       }
     }
   }
-  // trees
-  for (let t = 0; t < 160; t++) {
-    const x = 3 + Math.floor(rand() * (SX - 6)), z = 3 + Math.floor(rand() * (SZ - 6));
-    let y = SY - 1; while (y > 0 && world[idx(x, y, z)] === B.AIR) y--;
+  for (let t = 0; t < 190; t++) {
+    const x = 3 + Math.floor(rand() * (SX - 6)), z = 3 + Math.floor(rand() * (SZ - 6)), y = heights[x * SZ + z];
     if (world[idx(x, y, z)] !== B.GRASS) continue;
-    const th = 4 + Math.floor(rand() * 2);
+    const th = 4 + Math.floor(rand() * 3);
     for (let i = 1; i <= th; i++) world[idx(x, y + i, z)] = B.LOG;
-    for (let dy = th - 2; dy <= th + 1; dy++) {
-      const r = dy > th ? 1 : 2;
+    for (let dy = th - 2; dy <= th + 1; dy++) { const r = dy > th - 1 ? 1 : 2;
       for (let dx = -r; dx <= r; dx++) for (let dz = -r; dz <= r; dz++) {
-        if (Math.abs(dx) === r && Math.abs(dz) === r && rand() < 0.5) continue;
-        const X = x + dx, Y = y + dy, Z = z + dz;
-        if (Y < SY && world[idx(X, Y, Z)] === B.AIR) world[idx(X, Y, Z)] = B.LEAVES;
-      }
-    }
+        if (Math.abs(dx) === r && Math.abs(dz) === r && (dy > th || rand() < 0.5)) continue;
+        const X = x + dx, Y = y + dy, Z = z + dz; if (Y < SY && world[idx(X, Y, Z)] === B.AIR) world[idx(X, Y, Z)] = B.LEAVES; } }
   }
-  // cacti on sand
-  for (let t = 0; t < 30; t++) {
-    const x = 1 + Math.floor(rand() * (SX - 2)), z = 1 + Math.floor(rand() * (SZ - 2));
-    let y = SY - 1; while (y > 0 && world[idx(x, y, z)] === B.AIR) y--;
-    if (world[idx(x, y, z)] === B.SAND && y > 16) for (let i = 1; i <= 2 + Math.floor(rand() * 2); i++) world[idx(x, y + i, z)] = B.CACTUS;
+  for (let t = 0; t < 40; t++) {
+    const x = 1 + Math.floor(rand() * (SX - 2)), z = 1 + Math.floor(rand() * (SZ - 2)), y = heights[x * SZ + z];
+    if (world[idx(x, y, z)] === B.SAND && y > SEA + 1) for (let i = 1; i <= 1 + Math.floor(rand() * 3); i++) world[idx(x, y + i, z)] = B.CACTUS;
+  }
+  for (let t = 0; t < 14; t++) {
+    const x = 1 + Math.floor(rand() * (SX - 2)), z = 1 + Math.floor(rand() * (SZ - 2)), y = heights[x * SZ + z];
+    if (world[idx(x, y, z)] === B.GRASS && world[idx(x, y + 1, z)] === B.AIR) world[idx(x, y + 1, z)] = rand() < 0.5 ? B.PUMPKIN : B.MELON;
   }
 }
 
-// ---------- WebGL ----------
+// ---- save / load (worlds kept in this browser) ----
+function encodeWorld() {
+  const out = []; let prev = world[0], run = 0;
+  for (let i = 0; i < world.length; i++) { const v = world[i]; if (v === prev && run < 255) run++; else { out.push(prev, run); prev = v; run = 1; } }
+  out.push(prev, run);
+  let s = ""; const u = new Uint8Array(out); for (let i = 0; i < u.length; i += 8192) s += String.fromCharCode.apply(null, u.subarray(i, i + 8192));
+  return btoa(s);
+}
+function decodeWorld(b64) {
+  const s = atob(b64); world = new Uint8Array(SX * SY * SZ); let k = 0;
+  for (let i = 0; i < s.length; i += 2) { const v = s.charCodeAt(i), n = s.charCodeAt(i + 1); world.fill(v, k, k + n); k += n; }
+}
+const store = { get(k, d) { try { const v = localStorage.getItem(k); return v === null ? d : JSON.parse(v); } catch (e) { return d; } },
+  set(k, v) { try { localStorage.setItem(k, JSON.stringify(v)); return true; } catch (e) { return false; } }, del(k) { try { localStorage.removeItem(k); } catch (e) {} } };
+let worlds = store.get("mcpe_worlds", []);
+let current = null; // world meta
+function saveWorld() {
+  if (!current) return;
+  current.player = { x: P.x, y: P.y, z: P.z, yaw: P.yaw, pitch: P.pitch, hp: P.hp, inv: P.inv, hot: P.hot, slot: P.slot };
+  current.played = Date.now();
+  const ok = store.set("mcpe_world_" + current.id, encodeWorld());
+  worlds = worlds.filter((w) => w.id !== current.id); worlds.unshift(current); store.set("mcpe_worlds", worlds);
+  return ok;
+}
+
+// ============================== WebGL ==============================
 const cv = document.getElementById("gl");
-const gl = cv.getContext("webgl", { antialias: false });
-if (!gl) { document.body.innerHTML = "<p style='color:#fff;padding:20px'>Sorry, this browser doesn't support WebGL.</p>"; return; }
+const gl = cv.getContext("webgl", { antialias: false, alpha: false });
 const VS = `attribute vec3 p; attribute vec2 uv; attribute float sh; attribute float tint;
 uniform mat4 m; varying vec2 vuv; varying float vsh; varying float vt; varying float vd;
 void main(){ gl_Position = m * vec4(p,1.0); vuv = uv; vsh = sh; vt = tint; vd = gl_Position.w; }`;
-const FS = `precision mediump float; uniform sampler2D tex; uniform vec3 fogc; uniform float fogd; uniform float under;
+const FS = `precision mediump float; uniform sampler2D tex; uniform vec3 fogc; uniform float fogd; uniform float alphaMul;
 varying vec2 vuv; varying float vsh; varying float vt; varying float vd;
-void main(){ vec4 c = texture2D(tex, vuv); if (c.a < 0.5) discard;
- if (vt > 0.5) c.rgb *= vec3(0.55, 0.85, 0.35);
+void main(){
+ if (vt > 1.5) { gl_FragColor = vec4(1.0, 1.0, 1.0, 0.8); return; }
+ vec4 c = texture2D(tex, vuv); if (c.a < 0.1) discard;
+ if (vt > 0.5) c.rgb *= vec3(0.49, 0.80, 0.33);
  c.rgb *= vsh;
- float f = clamp((vd - fogd*0.45) / (fogd*0.55), 0.0, 1.0);
- vec3 fc = mix(fogc, vec3(0.1,0.25,0.6), under);
- gl_FragColor = vec4(mix(c.rgb, fc, f), c.a); }`;
-function sh(type, src) { const s = gl.createShader(type); gl.shaderSource(s, src); gl.compileShader(s); if (!gl.getShaderParameter(s, gl.COMPILE_STATUS)) throw gl.getShaderInfoLog(s); return s; }
-const prog = gl.createProgram(); gl.attachShader(prog, sh(gl.VERTEX_SHADER, VS)); gl.attachShader(prog, sh(gl.FRAGMENT_SHADER, FS)); gl.linkProgram(prog); gl.useProgram(prog);
-const L = { p: gl.getAttribLocation(prog, "p"), uv: gl.getAttribLocation(prog, "uv"), sh: gl.getAttribLocation(prog, "sh"), tint: gl.getAttribLocation(prog, "tint"),
-  m: gl.getUniformLocation(prog, "m"), fogc: gl.getUniformLocation(prog, "fogc"), fogd: gl.getUniformLocation(prog, "fogd"), under: gl.getUniformLocation(prog, "under") };
-const tex = gl.createTexture();
-const atlasImg = new Image();
-atlasImg.onload = () => {
-  gl.bindTexture(gl.TEXTURE_2D, tex);
-  gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, atlasImg);
-  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.NEAREST); gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.NEAREST);
-  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE); gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
-};
-atlasImg.src = A.terrain;
-const guiImg = new Image(); guiImg.src = A.gui;
-const atlas2d = atlasImg; // also used for hotbar icons
-
-// ---------- chunk meshing ----------
+ float f = clamp((vd - fogd*0.55) / (fogd*0.45), 0.0, 1.0);
+ gl_FragColor = vec4(mix(c.rgb, fogc, f), c.a * alphaMul); }`;
+let prog, L = {}, tex;
+function initGL() {
+  const sh = (t, s) => { const o = gl.createShader(t); gl.shaderSource(o, s); gl.compileShader(o); return o; };
+  prog = gl.createProgram(); gl.attachShader(prog, sh(gl.VERTEX_SHADER, VS)); gl.attachShader(prog, sh(gl.FRAGMENT_SHADER, FS)); gl.linkProgram(prog); gl.useProgram(prog);
+  for (const a of ["p", "uv", "sh", "tint"]) L[a] = gl.getAttribLocation(prog, a);
+  for (const u of ["m", "fogc", "fogd", "alphaMul"]) L[u] = gl.getUniformLocation(prog, u);
+  tex = gl.createTexture();
+  const up = () => { gl.bindTexture(gl.TEXTURE_2D, tex); gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, IM.terrain);
+    for (const [k, v] of [[gl.TEXTURE_MIN_FILTER, gl.NEAREST], [gl.TEXTURE_MAG_FILTER, gl.NEAREST], [gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE], [gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE]]) gl.texParameteri(gl.TEXTURE_2D, k, v); };
+  if (IM.terrain.complete && IM.terrain.naturalWidth) up(); else IM.terrain.addEventListener("load", up);
+}
+if (gl) initGL();
 const NCX = SX / CH, NCZ = SZ / CH;
 const chunks = [];
-for (let i = 0; i < NCX * NCZ; i++) chunks.push({ buf: gl.createBuffer(), n: 0, wbuf: gl.createBuffer(), wn: 0, dirty: true });
+if (gl) for (let i = 0; i < NCX * NCZ; i++) chunks.push({ buf: gl.createBuffer(), n: 0, wbuf: gl.createBuffer(), wn: 0, dirty: true });
 function markDirty(x, z) {
-  const cx = Math.floor(x / CH), cz = Math.floor(z / CH);
   for (const [dx, dz] of [[0, 0], [1, 0], [-1, 0], [0, 1], [0, -1]]) {
     const X = Math.floor((x + dx) / CH), Z = Math.floor((z + dz) / CH);
     if (X >= 0 && Z >= 0 && X < NCX && Z < NCZ) chunks[Z * NCX + X].dirty = true;
   }
 }
-// face: dir, 4 corners, shade
 const FACE_DEF = [
   { d: [0, 1, 0], c: [[0, 1, 1], [1, 1, 1], [1, 1, 0], [0, 1, 0]], s: 1.0, f: 0 },
   { d: [0, -1, 0], c: [[0, 0, 0], [1, 0, 0], [1, 0, 1], [0, 0, 1]], s: 0.5, f: 1 },
-  { d: [1, 0, 0], c: [[1, 0, 1], [1, 0, 0], [1, 1, 0], [1, 1, 1]], s: 0.75, f: 2 },
-  { d: [-1, 0, 0], c: [[0, 0, 0], [0, 0, 1], [0, 1, 1], [0, 1, 0]], s: 0.75, f: 2 },
-  { d: [0, 0, 1], c: [[0, 0, 1], [1, 0, 1], [1, 1, 1], [0, 1, 1]], s: 0.86, f: 2 },
-  { d: [0, 0, -1], c: [[1, 0, 0], [0, 0, 0], [0, 1, 0], [1, 1, 0]], s: 0.86, f: 2 },
+  { d: [1, 0, 0], c: [[1, 0, 1], [1, 0, 0], [1, 1, 0], [1, 1, 1]], s: 0.6, f: 2 },
+  { d: [-1, 0, 0], c: [[0, 0, 0], [0, 0, 1], [0, 1, 1], [0, 1, 0]], s: 0.6, f: 2 },
+  { d: [0, 0, 1], c: [[0, 0, 1], [1, 0, 1], [1, 1, 1], [0, 1, 1]], s: 0.8, f: 2 },
+  { d: [0, 0, -1], c: [[1, 0, 0], [0, 0, 0], [0, 1, 0], [1, 1, 0]], s: 0.8, f: 2 },
 ];
-const E = 1 / 256 * 0.01;
+const E = 0.0004;
+// smooth lighting: darken corners tucked against other blocks (ambient occlusion, like PE)
+function ao(x, y, z, F, c) {
+  const n = F.d, bx = x + n[0], by = y + n[1], bz = z + n[2];
+  const axes = [0, 1, 2].filter((i) => n[i] === 0);
+  const o = axes.map((i) => c[i] * 2 - 1);
+  const off = (i, v) => { const d = [0, 0, 0]; d[axes[i]] = v; return d; };
+  const a1 = off(0, o[0]), a2 = off(1, o[1]);
+  const s1 = SOLID(get(bx + a1[0], by + a1[1], bz + a1[2])) ? 1 : 0;
+  const s2 = SOLID(get(bx + a2[0], by + a2[1], bz + a2[2])) ? 1 : 0;
+  const cc = SOLID(get(bx + a1[0] + a2[0], by + a1[1] + a2[1], bz + a1[2] + a2[2])) ? 1 : 0;
+  return 1 - (s1 && s2 ? 3 : s1 + s2 + cc) * 0.17;
+}
 function buildChunk(ci) {
-  const cx = (ci % NCX) * CH, cz = Math.floor(ci / NCX) * CH;
-  const out = [], wout = [];
+  const cx = (ci % NCX) * CH, cz = Math.floor(ci / NCX) * CH, out = [], wout = [];
   for (let y = 0; y < SY; y++) for (let z = cz; z < cz + CH; z++) for (let x = cx; x < cx + CH; x++) {
     const id = world[idx(x, y, z)]; if (!id) continue;
     for (const F of FACE_DEF) {
       const nb = get(x + F.d[0], y + F.d[1], z + F.d[2]);
-      if (id === B.WATER) { if (nb !== B.AIR) continue; }
-      else if (!TRANSPARENT.has(nb) || (nb === id && id !== B.LEAVES)) continue;
+      if (id === B.WATER) { if (nb !== B.AIR && !(nb !== B.WATER && SEE_THROUGH.has(nb))) continue; }
+      else if (!SEE_THROUGH.has(nb) || (nb === id && id !== B.LEAVES)) continue;
       const t = tileOf(id, F.f), u0 = (t % 16) / 16 + E, v0 = Math.floor(t / 16) / 16 + E, u1 = u0 + 1 / 16 - 2 * E, v1 = v0 + 1 / 16 - 2 * E;
       const uvs = [[u0, v1], [u1, v1], [u1, v0], [u0, v0]];
-      const tint = TINT_GREEN.has(t) ? 1 : 0;
-      const yo = id === B.WATER && F.d[1] === 1 ? -0.12 : 0;
+      const tint = TINT.has(t) ? 1 : 0, yo = id === B.WATER && F.d[1] === 1 && get(x, y + 1, z) !== B.WATER ? -0.11 : 0;
       const target = id === B.WATER ? wout : out;
-      const v = F.c.map((c, k) => [x + c[0], y + c[1] + (c[1] ? yo : 0), z + c[2], uvs[k][0], uvs[k][1], F.s, tint]);
-      for (const k of [0, 1, 2, 0, 2, 3]) target.push(...v[k]);
+      const v = F.c.map((c, k) => [x + c[0], y + c[1] + (c[1] ? yo : 0), z + c[2], uvs[k][0], uvs[k][1], F.s * (id === B.WATER ? 1 : ao(x, y, z, F, c)), tint]);
+      const flip = v[0][5] + v[2][5] < v[1][5] + v[3][5];
+      for (const k of flip ? [1, 2, 3, 1, 3, 0] : [0, 1, 2, 0, 2, 3]) target.push(...v[k]);
     }
   }
   const ch = chunks[ci];
@@ -223,13 +238,35 @@ function buildChunk(ci) {
 }
 function bindAttribs(buf) {
   gl.bindBuffer(gl.ARRAY_BUFFER, buf);
-  gl.enableVertexAttribArray(L.p); gl.vertexAttribPointer(L.p, 3, gl.FLOAT, false, 28, 0);
-  gl.enableVertexAttribArray(L.uv); gl.vertexAttribPointer(L.uv, 2, gl.FLOAT, false, 28, 12);
-  gl.enableVertexAttribArray(L.sh); gl.vertexAttribPointer(L.sh, 1, gl.FLOAT, false, 28, 20);
-  gl.enableVertexAttribArray(L.tint); gl.vertexAttribPointer(L.tint, 1, gl.FLOAT, false, 28, 24);
+  for (const [a, n, o] of [[L.p, 3, 0], [L.uv, 2, 12], [L.sh, 1, 20], [L.tint, 1, 24]]) { gl.enableVertexAttribArray(a); gl.vertexAttribPointer(a, n, gl.FLOAT, false, 28, o); }
 }
-
-// ---------- matrices ----------
+// clouds: one flat layer of white rectangles drifting slowly
+let cloudBuf = null, cloudN = 0;
+function buildClouds() {
+  if (!gl) return;
+  const n = noise2(77), out = [], Y = SY + 14, S = 12;
+  for (let gx = -12; gx < 24; gx++) for (let gz = -12; gz < 24; gz++) {
+    if (n(gx / 4, gz / 4) < 0.18) continue;
+    const x0 = gx * S, z0 = gz * S, x1 = x0 + S, z1 = z0 + S;
+    const q = [[x0, Y, z1], [x1, Y, z1], [x1, Y, z0], [x0, Y, z0]];
+    for (const k of [0, 1, 2, 0, 2, 3]) out.push(...q[k], 0, 0, 1, 2);
+  }
+  cloudBuf = gl.createBuffer(); gl.bindBuffer(gl.ARRAY_BUFFER, cloudBuf); gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(out), gl.STATIC_DRAW); cloudN = out.length / 7;
+}
+buildClouds();
+// crack overlay on the block being mined (destroy stages live on atlas row 15)
+const crackBuf = gl ? gl.createBuffer() : null;
+function drawCrack(x, y, z, stage) {
+  const t = T(15, Math.min(9, stage)), u0 = (t % 16) / 16 + E, v0 = Math.floor(t / 16) / 16 + E, u1 = u0 + 1 / 16 - 2 * E, v1 = v0 + 1 / 16 - 2 * E;
+  const out = [], g = 0.003;
+  for (const F of FACE_DEF) {
+    const uvs = [[u0, v1], [u1, v1], [u1, v0], [u0, v0]];
+    const v = F.c.map((c, k) => [x + c[0] + (c[0] ? g : -g), y + c[1] + (c[1] ? g : -g), z + c[2] + (c[2] ? g : -g), uvs[k][0], uvs[k][1], 1, 0]);
+    for (const k of [0, 1, 2, 0, 2, 3]) out.push(...v[k]);
+  }
+  gl.bindBuffer(gl.ARRAY_BUFFER, crackBuf); gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(out), gl.DYNAMIC_DRAW);
+  bindAttribs(crackBuf); gl.drawArrays(gl.TRIANGLES, 0, out.length / 7);
+}
 function persp(fov, asp, n, f) { const t = 1 / Math.tan(fov / 2); return [t / asp, 0, 0, 0, 0, t, 0, 0, 0, 0, (f + n) / (n - f), -1, 0, 0, 2 * f * n / (n - f), 0]; }
 function mul(a, b) { const o = new Array(16).fill(0); for (let i = 0; i < 4; i++) for (let j = 0; j < 4; j++) for (let k = 0; k < 4; k++) o[j * 4 + i] += a[k * 4 + i] * b[j * 4 + k]; return o; }
 function view(px, py, pz, yaw, pitch) {
@@ -239,272 +276,598 @@ function view(px, py, pz, yaw, pitch) {
     -(rx[0] * px + rx[1] * py + rx[2] * pz), -(ux[0] * px + ux[1] * py + ux[2] * pz), -(fz[0] * px + fz[1] * py + fz[2] * pz), 1];
 }
 
-// ---------- player ----------
-const P = { x: SX / 2, y: 40, z: SZ / 2, vx: 0, vy: 0, vz: 0, yaw: 0, pitch: 0, ground: false, fly: false, hp: 20, air: 300, slot: 0, fallStart: null };
-let mode = "creative", playing = false;
-const keys = {};
-let lastSpace = 0;
+// ============================== player ==============================
+const P = { x: 64, y: 40, z: 64, vx: 0, vy: 0, vz: 0, yaw: 0, pitch: 0, ground: false, fly: false, hp: 20, air: 300, slot: 0,
+  hot: [1, 2, 3, 4, 5, 6, 10, 11, 8], inv: {}, fallStart: null, bob: 0, hurtT: 0, regen: 0 };
 const W = 0.3, HGT = 1.8, EYE = 1.62;
+let mode = "creative";
+const OPT = Object.assign({ sound: true, sens: 1, invertY: false, autojump: true, dist: 1 }, store.get("mcpe_options", {}));
 function collides(x, y, z) {
   for (let X = Math.floor(x - W); X <= Math.floor(x + W); X++)
     for (let Y = Math.floor(y); Y <= Math.floor(y + HGT - 0.01); Y++)
-      for (let Z = Math.floor(z - W); Z <= Math.floor(z + W); Z++) if (SOLID(get(X, Y, Z))) return true;
+      for (let Z = Math.floor(z - W); Z <= Math.floor(z + W); Z++) if (SOLID(get(X, Y, Z)) || X < 0 || Z < 0 || X >= SX || Z >= SZ) return true;
   return false;
 }
-function spawn() {
-  P.x = SX / 2 + 0.5; P.z = SZ / 2 + 0.5;
-  for (let tries = 0; tries < 400; tries++) {
-    let y = SY - 1; while (y > 0 && get(Math.floor(P.x), y, Math.floor(P.z)) === B.AIR) y--;
-    const top = get(Math.floor(P.x), y, Math.floor(P.z));
-    if ((top === B.GRASS || (tries > 200 && top !== B.WATER && top !== B.LEAVES)) && y > 16) { P.y = y + 1; break; }
-    P.x = 4 + Math.random() * (SX - 8); P.z = 4 + Math.random() * (SZ - 8);
+function findSpawn() {
+  for (let r = 0; r < 60; r += 2) for (let a = 0; a < 16; a++) {
+    const x = Math.floor(SX / 2 + Math.cos(a / 16 * 6.28) * r), z = Math.floor(SZ / 2 + Math.sin(a / 16 * 6.28) * r);
+    let y = SY - 1; while (y > 0 && get(x, y, z) === B.AIR) y--;
+    if (get(x, y, z) === B.GRASS && y > SEA) return [x + 0.5, y + 1, z + 0.5];
   }
-  P.vx = P.vy = P.vz = 0; P.hp = 20; P.fly = false; P.fallStart = null;
+  return [SX / 2, SY - 2, SZ / 2];
 }
+const standing = (x, z) => collides(x, P.y - 0.05, z);
 function physics(dt) {
-  const inWater = get(Math.floor(P.x), Math.floor(P.y + 0.4), Math.floor(P.z)) === B.WATER;
-  const speed = P.fly ? 10 : keys.sneak && !P.fly ? 1.4 : inWater ? 2.2 : 4.3;
-  let fx = 0, fz = 0;
-  if (keys.f) fz -= 1; if (keys.b) fz += 1; if (keys.l) fx -= 1; if (keys.r) fx += 1;
-  const len = Math.hypot(fx, fz) || 1;
-  const cy = Math.cos(P.yaw), sy = Math.sin(P.yaw);
+  const feet = get(Math.floor(P.x), Math.floor(P.y + 0.3), Math.floor(P.z)) === B.WATER;
+  const sneak = keys.sneak && !P.fly;
+  const speed = P.fly ? 10.9 : sneak ? 1.3 : feet ? 2.2 : (keys.sprint ? 5.6 : 4.3);
+  const fx = (keys.r ? 1 : 0) - (keys.l ? 1 : 0), fz = (keys.b ? 1 : 0) - (keys.f ? 1 : 0);
+  const len = Math.max(1, Math.hypot(fx, fz)), cy = Math.cos(P.yaw), sy = Math.sin(P.yaw);
   const wx = (fx * cy + fz * sy) / len * speed, wz = (-fx * sy + fz * cy) / len * speed;
-  const accel = P.ground || P.fly ? 0.3 : 0.08;
+  const accel = P.ground || P.fly ? 0.35 : 0.06;
   P.vx += (wx - P.vx) * accel; P.vz += (wz - P.vz) * accel;
-  if (P.fly) { P.vy = (keys.jump ? 8 : 0) - (keys.sneak ? 8 : 0); }
-  else if (inWater) { P.vy = Math.max(P.vy - 9 * dt, -3); if (keys.jump) P.vy = 3; }
-  else { P.vy -= 28 * dt; if (P.vy < -50) P.vy = -50; if (keys.jump && P.ground) { P.vy = 8.6; P.ground = false; } }
-  // move axis by axis
-  const nx = P.x + P.vx * dt; if (!collides(nx, P.y, P.z)) P.x = nx; else P.vx = 0;
-  const nz = P.z + P.vz * dt; if (!collides(P.x, P.y, nz)) P.z = nz; else P.vz = 0;
+  if (P.fly) P.vy = (keys.jump ? 7.5 : 0) - (keys.sneak || keys.down ? 7.5 : 0);
+  else if (feet) { P.vy = Math.max(P.vy - 10 * dt, -2.5); if (keys.jump) P.vy = 3.2; }
+  else { P.vy -= 32 * dt; P.vy = Math.max(P.vy, -60); if (keys.jump && P.ground) { P.vy = 8.9; P.ground = false; } }
+  // horizontal move; sneaking stops you walking off edges
+  const nx = P.x + P.vx * dt; if (!collides(nx, P.y, P.z) && !(sneak && P.ground && !standing(nx, P.z))) P.x = nx; else P.vx = 0;
+  const nz = P.z + P.vz * dt; if (!collides(P.x, P.y, nz) && !(sneak && P.ground && !standing(P.x, nz))) P.z = nz; else P.vz = 0;
+  // auto-jump one block when walking into a ledge (Pocket Edition behaviour)
+  if (P.ground && OPT.autojump && !P.fly && Math.hypot(wx, wz) > 0.5) {
+    const ax = P.x + (wx / speed) * 0.4, az = P.z + (wz / speed) * 0.4;
+    if (collides(ax, P.y, az) && !collides(ax, P.y + 1.05, az) && !collides(P.x, P.y + 1.05, P.z)) { P.vy = 8.9; P.ground = false; }
+  }
   const ny = P.y + P.vy * dt;
   if (!collides(P.x, ny, P.z)) { P.y = ny; P.ground = false; }
   else {
     if (P.vy < 0) {
-      P.y = Math.floor(ny) + 1 - 0.0001; if (collides(P.x, P.y, P.z)) P.y = Math.ceil(P.y);
-      if (!P.ground && mode === "survival" && P.fallStart !== null) { const d = P.fallStart - P.y - 3; if (d > 0) hurt(Math.floor(d)); }
+      P.y = Math.floor(ny) + 1; if (collides(P.x, P.y, P.z)) P.y = Math.ceil(P.y);
+      if (!P.ground && mode === "survival" && P.fallStart !== null) { const d = Math.floor(P.fallStart - P.y - 3); if (d > 0) hurt(d); }
+      if (!P.ground) sfx("step");
       P.ground = true; P.fallStart = null; if (P.fly && mode === "creative") P.fly = false;
     }
     P.vy = 0;
   }
-  if (!P.ground && !P.fly && !inWater) { if (P.fallStart === null || P.y > P.fallStart) P.fallStart = P.y; } else if (inWater) P.fallStart = null;
-  // drowning (survival)
-  const headWater = get(Math.floor(P.x), Math.floor(P.y + EYE), Math.floor(P.z)) === B.WATER;
-  if (mode === "survival") { if (headWater) { P.air -= 1; if (P.air <= 0 && Math.floor(P.air) % 60 === 0) hurt(2); } else P.air = 300; }
-  if (P.y < -10) { if (mode === "survival") hurt(20); else { P.y = SY + 4; P.vy = 0; } }
-  return headWater;
+  if (!P.ground && !P.fly && !feet) { if (P.fallStart === null || P.y > P.fallStart) P.fallStart = P.y; } else if (feet || P.fly) P.fallStart = null;
+  const hsp = Math.hypot(P.vx, P.vz);
+  if (P.ground && hsp > 0.5) { const before = Math.floor(P.bob / Math.PI); P.bob += hsp * dt * 2.1; if (Math.floor(P.bob / Math.PI) !== before) sfx("step"); } else P.bob *= 0.9;
+  const head = get(Math.floor(P.x), Math.floor(P.y + EYE), Math.floor(P.z)) === B.WATER;
+  if (mode === "survival") {
+    if (head) { P.air -= 1; if (P.air <= -20) { P.air = 0; hurt(2); } } else P.air = 300;
+    P.regen += dt; if (P.regen > 4 && P.hp < 20 && P.hp > 0) { P.hp++; P.regen = 0; }
+  }
+  if (P.y < -20) { if (mode === "survival") hurt(40); else { P.y = SY + 4; P.vy = 0; } }
+  if (P.hurtT > 0) P.hurtT -= dt;
+  return head;
 }
-function hurt(n) { P.hp -= n; flash = 0.4; tone(160, 0.15, "square", 0.08); if (P.hp <= 0) { tone(120, 0.6, "sawtooth", 0.08, -80); spawn(); } }
+function hurt(n) { if (P.hp <= 0) return; P.hp -= n; P.hurtT = 0.35; P.regen = 0; sfx("hurt"); if (P.hp <= 0) { P.hp = 0; openScreen("dead"); } }
 
-// ---------- ray picking ----------
+// ---- mining / placing ----
 function raycast() {
   const dx = -Math.sin(P.yaw) * Math.cos(P.pitch), dy = -Math.sin(P.pitch), dz = -Math.cos(P.yaw) * Math.cos(P.pitch);
-  let x = P.x, y = P.y + EYE, z = P.z, prev = null;
-  for (let t = 0; t < 6; t += 0.02) {
-    const X = Math.floor(x + dx * t), Y = Math.floor(y + dy * t), Z = Math.floor(z + dz * t);
+  const ox = P.x, oy = P.y + EYE, oz = P.z;
+  let X = Math.floor(ox), Y = Math.floor(oy), Z = Math.floor(oz);
+  const sx = Math.sign(dx), sy = Math.sign(dy), sz = Math.sign(dz);
+  const tdx = Math.abs(1 / dx), tdy = Math.abs(1 / dy), tdz = Math.abs(1 / dz);
+  let tx = dx ? ((sx > 0 ? X + 1 - ox : ox - X) * tdx) : 1e9, ty = dy ? ((sy > 0 ? Y + 1 - oy : oy - Y) * tdy) : 1e9, tz = dz ? ((sz > 0 ? Z + 1 - oz : oz - Z) * tdz) : 1e9;
+  let prev = null;
+  for (let i = 0; i < 64; i++) {
     const id = get(X, Y, Z);
-    if (id !== B.AIR && id !== B.WATER && Y >= 0) return { x: X, y: Y, z: Z, prev };
-    if (!prev || prev[0] !== X || prev[1] !== Y || prev[2] !== Z) prev = [X, Y, Z];
+    if (id !== B.AIR && id !== B.WATER && Y >= 0) return { x: X, y: Y, z: Z, prev, id };
+    prev = [X, Y, Z];
+    if (tx < ty && tx < tz) { if (tx > 5) break; X += sx; tx += tdx; } else if (ty < tz) { if (ty > 5) break; Y += sy; ty += tdy; } else { if (tz > 5) break; Z += sz; tz += tdz; }
   }
   return null;
 }
-function breakBlock() {
-  const h = raycast(); if (!h) return;
-  if (get(h.x, h.y, h.z) === B.BEDROCK && mode !== "creative") return;
-  if (h.y === 0) return;
-  const id = get(h.x, h.y, h.z);
+const mine = { x: 0, y: 0, z: 0, t: 0, hitT: 0, active: false };
+function mineTick(dt, holding) {
+  const h = holding ? raycast() : null;
+  if (!h) { mine.active = false; mine.t = 0; return null; }
+  if (!mine.active || mine.x !== h.x || mine.y !== h.y || mine.z !== h.z) { mine.active = true; mine.x = h.x; mine.y = h.y; mine.z = h.z; mine.t = 0; mine.hitT = 0; }
+  swing = 0.25;
+  if (mode === "creative") { // instant break, with a short delay between blocks while held
+    if (mine.t <= 0) { breakAt(h); mine.t = 0.22; mine.active = false; } else mine.t -= dt;
+    return null;
+  }
+  const hard = HARD[h.id] ?? 1; if (hard > 1e8) return null;
+  mine.t += dt; mine.hitT += dt; if (mine.hitT > 0.25) { mine.hitT = 0; sfx("dig"); }
+  const need = hard * 1.5;
+  if (mine.t >= need) { breakAt(h); mine.active = false; mine.t = 0; return null; }
+  return Math.floor(mine.t / need * 10);
+}
+function breakAt(h) {
   set(h.x, h.y, h.z, B.AIR);
-  // let water flow into the hole from a neighbour
-  if ([[1, 0, 0], [-1, 0, 0], [0, 0, 1], [0, 0, -1], [0, 1, 0]].some(([a, b, c]) => get(h.x + a, h.y + b, h.z + c) === B.WATER) && h.y <= 16) set(h.x, h.y, h.z, B.WATER);
-  burst(h.x, h.y, h.z, id); tone(220 + Math.random() * 80, 0.08, "triangle", 0.08);
+  if ([[1, 0, 0], [-1, 0, 0], [0, 0, 1], [0, 0, -1], [0, 1, 0]].some(([a, b, c]) => get(h.x + a, h.y + b, h.z + c) === B.WATER) && h.y <= SEA) set(h.x, h.y, h.z, B.WATER);
+  for (let y = h.y + 1; y < SY; y++) { const b = get(h.x, y, h.z); if (b === B.SAND || b === B.GRAVEL) { set(h.x, y - 1, h.z, b); set(h.x, y, h.z, B.AIR); } else break; }
+  burst(h.x, h.y, h.z, h.id); sfx("break");
+  if (mode === "survival") { const d = DROP[h.id] === undefined ? h.id : DROP[h.id]; if (d) give(d, 1); }
+}
+function give(id, n) {
+  P.inv[id] = (P.inv[id] || 0) + n;
+  if (!P.hot.includes(id)) { const e = P.hot.findIndex((v) => !v || !P.inv[v]); if (e >= 0) P.hot[e] = id; }
+  sfx("pop");
 }
 function placeBlock() {
-  const h = raycast(); if (!h || !h.prev) return;
-  const [x, y, z] = h.prev; if (y >= SY) return;
-  const id = HOTBAR[P.slot];
-  const old = get(x, y, z);
-  set(x, y, z, id);
-  if (collides(P.x, P.y, P.z)) { set(x, y, z, old); return; }
-  tone(330, 0.06, "triangle", 0.07);
+  const h = raycast(); if (!h || !h.prev) return false;
+  const id = P.hot[P.slot]; if (!id) return false;
+  if (mode === "survival" && !(P.inv[id] > 0)) return false;
+  const [x, y, z] = h.prev; if (y >= SY || y < 0) return false;
+  const old = get(x, y, z); if (old !== B.AIR && old !== B.WATER) return false;
+  world[idx(x, y, z)] = id;
+  if (collides(P.x, P.y, P.z)) { world[idx(x, y, z)] = old; return false; }
+  markDirty(x, z);
+  if (mode === "survival") { P.inv[id]--; if (P.inv[id] <= 0) delete P.inv[id]; }
+  sfx("place"); swing = 0.25; return true;
 }
-// tiny block-break particles in screen space
-let particles = [], flash = 0;
-function burst(x, y, z, id) { for (let i = 0; i < 10; i++) particles.push({ x: x + 0.5, y: y + 0.5, z: z + 0.5, vx: (Math.random() - 0.5) * 3, vy: Math.random() * 3, vz: (Math.random() - 0.5) * 3, t: 0, tile: tileOf(id, 2) }); }
+let particles = [], swing = 0;
+function burst(x, y, z, id) { for (let i = 0; i < 14; i++) particles.push({ x: x + 0.2 + Math.random() * 0.6, y: y + 0.2 + Math.random() * 0.6, z: z + 0.2 + Math.random() * 0.6, vx: (Math.random() - 0.5) * 3, vy: Math.random() * 3, vz: (Math.random() - 0.5) * 3, t: 0, tile: tileOf(id, 2), ox: Math.floor(Math.random() * 12), oy: Math.floor(Math.random() * 12) }); }
 
-// ---------- sound ----------
+// ============================== sound ==============================
 let ac = null;
 function au() { if (!ac) try { ac = new (window.AudioContext || window.webkitAudioContext)(); } catch (e) {} if (ac && ac.state === "suspended") ac.resume(); }
-function tone(f, d, type = "square", v = 0.05, slide = 0) {
-  if (!ac) return; const t = ac.currentTime, o = ac.createOscillator(), g = ac.createGain();
+function noiseHit(d, v, f) {
+  if (!ac || !OPT.sound) return; const b = ac.createBuffer(1, Math.floor(ac.sampleRate * d), ac.sampleRate), x = b.getChannelData(0);
+  for (let i = 0; i < x.length; i++) x[i] = (Math.random() * 2 - 1) * Math.pow(1 - i / x.length, 2);
+  const s = ac.createBufferSource(), g = ac.createGain(), fl = ac.createBiquadFilter(); fl.type = "bandpass"; fl.frequency.value = f; fl.Q.value = 1.2;
+  s.buffer = b; g.gain.value = v; s.connect(fl); fl.connect(g); g.connect(ac.destination); s.start();
+}
+function tone(f, d, type, v, slide = 0) {
+  if (!ac || !OPT.sound) return; const t = ac.currentTime, o = ac.createOscillator(), g = ac.createGain();
   o.type = type; o.frequency.setValueAtTime(f, t); if (slide) o.frequency.exponentialRampToValueAtTime(Math.max(30, f + slide), t + d);
   g.gain.setValueAtTime(v, t); g.gain.exponentialRampToValueAtTime(0.0001, t + d); o.connect(g); g.connect(ac.destination); o.start(t); o.stop(t + d + 0.02);
 }
+function sfx(k) {
+  if (k === "click") tone(1000, 0.04, "square", 0.04);
+  else if (k === "step") noiseHit(0.08, 0.12, 400 + Math.random() * 300);
+  else if (k === "dig") noiseHit(0.1, 0.18, 600 + Math.random() * 400);
+  else if (k === "break") noiseHit(0.2, 0.3, 500);
+  else if (k === "place") noiseHit(0.12, 0.25, 350);
+  else if (k === "pop") tone(1300 + Math.random() * 300, 0.06, "sine", 0.06);
+  else if (k === "hurt") tone(180, 0.18, "square", 0.08, -60);
+}
 
-// ---------- input ----------
-const KEYS = { KeyW: "f", ArrowUp: "f", KeyS: "b", ArrowDown: "b", KeyA: "l", ArrowLeft: "l", KeyD: "r", ArrowRight: "r", Space: "jump", ShiftLeft: "sneak", ShiftRight: "sneak" };
+// ============================== GUI (sheet art + bitmap font) ==============================
+const hud = document.getElementById("hud"), g2 = hud.getContext("2d");
+let GS = 2, UW = 0, UH = 0;   // gui scale and logical gui size
+function resize() {
+  hud.width = innerWidth; hud.height = innerHeight;
+  if (gl) { const d = Math.min(2, devicePixelRatio || 1); cv.width = innerWidth * d; cv.height = innerHeight * d; }
+  GS = Math.max(1, Math.min(4, Math.floor(Math.min(innerWidth / 320, innerHeight / 240))));
+  UW = Math.ceil(innerWidth / GS); UH = Math.ceil(innerHeight / GS);
+}
+addEventListener("resize", resize); resize();
+const glyphW = new Array(256).fill(6), fontTint = {};
+function measureFont() {
+  const c = document.createElement("canvas"); c.width = c.height = 128; const x = c.getContext("2d"); x.drawImage(IM.font, 0, 0);
+  const d = x.getImageData(0, 0, 128, 128).data;
+  for (let ch = 0; ch < 256; ch++) {
+    const gx = (ch % 16) * 8, gy = Math.floor(ch / 16) * 8; let w = 0;
+    for (let px = 7; px >= 0 && !w; px--) for (let py = 0; py < 8; py++) if (d[((gy + py) * 128 + gx + px) * 4 + 3] > 0) { w = px + 1; break; }
+    glyphW[ch] = ch === 32 ? 4 : w + 1;
+  }
+}
+function tinted(col) {
+  if (fontTint[col]) return fontTint[col];
+  const c = document.createElement("canvas"); c.width = c.height = 128; const x = c.getContext("2d");
+  x.drawImage(IM.font, 0, 0); x.globalCompositeOperation = "source-in"; x.fillStyle = col; x.fillRect(0, 0, 128, 128);
+  return (fontTint[col] = c);
+}
+function shadowOf(col) { const n = parseInt(col.slice(1), 16); return "#" + [(n >> 16) & 255, (n >> 8) & 255, n & 255].map((v) => Math.floor(v / 4).toString(16).padStart(2, "0")).join(""); }
+function textW(s) { let w = 0; for (const c of s) w += glyphW[c.charCodeAt(0) & 255]; return w - 1; }
+function text(s, x, y, col = "#ffffff", shadow = true, align = "left", scale = 1) {
+  if (!IM.font._m) return;
+  s = String(s); const w = textW(s) * scale;
+  if (align === "center") x -= w / 2; else if (align === "right") x -= w;
+  const draw = (im, ox, oy) => { let cx = x + ox; for (const ch of s) { const k = ch.charCodeAt(0) & 255;
+    g2.drawImage(im, (k % 16) * 8, Math.floor(k / 16) * 8, 8, 8, Math.round(cx * GS), Math.round((y + oy) * GS), 8 * GS * scale, 8 * GS * scale); cx += glyphW[k] * scale; } };
+  if (shadow) draw(tinted(shadowOf(col)), scale, scale);
+  draw(tinted(col), 0, 0);
+}
+function blit(sx, sy, sw, sh, x, y, w = sw, h = sh, im = IM.gui) { if (im.complete && im.naturalWidth) g2.drawImage(im, sx, sy, sw, sh, Math.round(x * GS), Math.round(y * GS), Math.round(w * GS), Math.round(h * GS)); }
+function rect(x, y, w, h, col) { g2.fillStyle = col; g2.fillRect(Math.round(x * GS), Math.round(y * GS), Math.round(w * GS), Math.round(h * GS)); }
+function dirtBG(dark = 0.25) {
+  const t = T(0, 2), s = 32;
+  for (let y = 0; y < UH; y += s) for (let x = 0; x < UW; x += s) blit((t % 16) * 16, Math.floor(t / 16) * 16, 16, 16, x, y, s, s, IM.terrain);
+  rect(0, 0, UW, UH, `rgba(0,0,0,${1 - dark})`);
+}
+// buttons: the 200x20 stone strips from gui.png (y=46 disabled, y=66 normal, y=86 hover)
+let hits = [], hover = null, pressedBtn = null;
+function button(id, x, y, w, h, label, opts = {}) {
+  const dis = opts.disabled, hov = !dis && (hover === id || pressedBtn === id), on = opts.selected;
+  const sy = dis ? 46 : hov || on ? 86 : 66, half = w / 2;
+  blit(0, sy, Math.ceil(half), 20, x, y, Math.ceil(half), h);
+  blit(200 - Math.floor(half), sy, Math.floor(half), 20, x + Math.ceil(half), y, Math.floor(half), h);
+  text(label, x + w / 2, y + (h - 8) / 2, dis ? "#a0a0a0" : hov || on ? "#ffffa0" : "#e0e0e0", true, "center");
+  if (!dis) hits.push({ id, x, y, w, h, fn: opts.fn });
+}
+function iconButton(id, x, y, w, h, draw, fn) { if (hover === id || pressedBtn === id) rect(x, y, w, h, "rgba(255,255,255,.2)"); draw(x, y, w, h); hits.push({ id, x, y, w, h, fn }); }
+function blockIcon(id, x, y, s) {
+  if (!id) return;
+  const t = tileOf(id, 2);
+  blit((t % 16) * 16, Math.floor(t / 16) * 16, 16, 16, x, y, s, s, IM.terrain);
+  if (TINT.has(t)) { g2.globalCompositeOperation = "multiply"; rect(x, y, s, s, "#7ccb54"); g2.globalCompositeOperation = "source-over"; }
+}
+const fName = document.getElementById("fName"), fSeed = document.getElementById("fSeed");
+function field(el, x, y, w, h) { el.style.display = "block"; el.style.left = x * GS + "px"; el.style.top = y * GS + "px"; el.style.width = w * GS + "px"; el.style.height = h * GS + "px"; el.style.fontSize = Math.max(12, 8 * GS) + "px"; }
+
+// ============================== screens ==============================
+let screen = "splash", screenT = 0;
+let newMode = "survival", worldListScroll = 0, notice = null, genStage = 0, genProgress = 0, confirmDel = null, optionsFrom = "title";
+function openScreen(s) {
+  screen = s; screenT = 0; fName.style.display = fSeed.style.display = "none";
+  if (s !== "game" && document.pointerLockElement) document.exitPointerLock();
+  for (const k in keys) keys[k] = false; mouse.l = mouse.r = false; hover = null;
+}
+const SPLASHES = ["Pocket edition!", "Now in your browser!", "Made of blocks!", "100% blocks!", "Also try Sonic!", "Don't dig straight down!", "Build a house!", "Blocky!"];
+const splash = SPLASHES[Math.floor(Math.random() * SPLASHES.length)];
+function drawScreen() {
+  hits = [];
+  const cx = UW / 2;
+  if (screen === "splash") {
+    rect(0, 0, UW, UH, "#ffffff");
+    const im = IM.mojang;
+    if (im.naturalWidth) { const w = Math.min(UW * 0.8, 360), h = w * im.height / im.width; g2.globalAlpha = clamp(Math.min(screenT / 0.4, (2.4 - screenT) / 0.4), 0, 1); blit(0, 0, im.width, im.height, cx - w / 2, UH / 2 - h / 2, w, h, im); g2.globalAlpha = 1; }
+    if (screenT > 2.5) openScreen("title");
+    hits.push({ id: "skip", x: 0, y: 0, w: UW, h: UH, fn: () => openScreen("title") });
+    return;
+  }
+  if (screen === "title") {
+    dirtBG(0.4);
+    const lg = IM.logo, lw = Math.min(UW - 20, 256), lh = lw * (lg.height || 63) / (lg.width || 256), ly = Math.max(8, UH * 0.1);
+    blit(0, 0, lg.width || 256, lg.height || 63, cx - lw / 2, ly, lw, lh, lg);
+    // yellow splash text, pulsing and tilted
+    const sx = cx + lw * 0.36, sy = ly + lh * 0.85, sc = 1 + Math.abs(Math.sin(screenT * 5)) * 0.08;
+    g2.save(); g2.translate(sx * GS, sy * GS); g2.rotate(-0.35); g2.scale(sc, sc); g2.translate(-sx * GS, -sy * GS);
+    text(splash, sx, sy, "#ffff00", true, "center"); g2.restore();
+    const by = Math.max(UH * 0.45, ly + lh + 22);
+    button("start", cx - 80, by, 160, 24, "Start Game", { fn: () => { notice = null; openScreen("select"); } });
+    button("join", cx - 80, by + 30, 160, 24, "Join Game", { disabled: true });
+    button("options", cx - 80, by + 60, 78, 20, "Options", { fn: () => { optionsFrom = "title"; openScreen("options"); } });
+    button("about", cx + 2, by + 60, 78, 20, "About", { fn: () => { notice = "Fan prototype built from the PE sprite sheets"; } });
+    text("v0.6.1 alpha", 2, UH - 10, "#ffffff", true);
+    if (notice) text(notice, cx, by + 88, "#e0e0e0", true, "center");
+    return;
+  }
+  if (screen === "options") {
+    if (optionsFrom === "pause") rect(0, 0, UW, UH, "rgba(0,0,0,.6)"); else dirtBG();
+    text("Options", cx, 14, "#ffffff", true, "center");
+    const bx = cx - 100;
+    button("o_sound", bx, 36, 200, 20, "Sound: " + (OPT.sound ? "ON" : "OFF"), { fn: () => { OPT.sound = !OPT.sound; saveOpt(); } });
+    button("o_sens", bx, 60, 200, 20, "Sensitivity: " + Math.round(OPT.sens * 100) + "%", { fn: () => { OPT.sens = OPT.sens >= 2 ? 0.5 : +(OPT.sens + 0.25).toFixed(2); saveOpt(); } });
+    button("o_inv", bx, 84, 200, 20, "Invert Y-axis: " + (OPT.invertY ? "ON" : "OFF"), { fn: () => { OPT.invertY = !OPT.invertY; saveOpt(); } });
+    button("o_jump", bx, 108, 200, 20, "Auto Jump: " + (OPT.autojump ? "ON" : "OFF"), { fn: () => { OPT.autojump = !OPT.autojump; saveOpt(); } });
+    button("o_dist", bx, 132, 200, 20, "Render Distance: " + ["Short", "Normal", "Far"][OPT.dist], { fn: () => { OPT.dist = (OPT.dist + 1) % 3; saveOpt(); } });
+    button("o_done", bx, UH - 28, 200, 20, "Done", { fn: () => optionsFrom === "pause" ? openScreen("pause") : openScreen("title") });
+    return;
+  }
+  if (screen === "select") {
+    dirtBG();
+    text("Select world", cx, 10, "#ffffff", true, "center");
+    const listX = cx - 110, listY = 26, rowH = 34, vis = Math.max(1, Math.floor((UH - 84) / rowH));
+    rect(listX - 4, listY - 4, 228, vis * rowH + 6, "rgba(0,0,0,.45)");
+    if (!worlds.length) text("No worlds yet. Create a new one!", cx, listY + 12, "#a0a0a0", true, "center");
+    worlds.slice(worldListScroll, worldListScroll + vis).forEach((w, i) => {
+      const y = listY + i * rowH, id = "w_" + w.id;
+      if (hover === id || pressedBtn === id) rect(listX, y, 196, rowH - 4, "rgba(255,255,255,.12)");
+      blit(0, 0, 16, 16, listX + 3, y + 3, 24, 24, IM.terrain); g2.globalCompositeOperation = "multiply"; rect(listX + 3, y + 3, 24, 24, "#7ccb54"); g2.globalCompositeOperation = "source-over";
+      text(w.name, listX + 32, y + 4, "#ffffff", true);
+      text((w.mode === "creative" ? "Creative" : "Survival") + "  " + new Date(w.played || w.created).toLocaleDateString(), listX + 32, y + 16, "#a0a0a0", true);
+      hits.push({ id, x: listX, y, w: 196, h: rowH - 4, fn: () => loadWorld(w) });
+      iconButton("del_" + w.id, listX + 200, y + 6, 18, 18, (x, yy) => text("x", x + 9, yy + 5, confirmDel === w.id ? "#ff5555" : "#a0a0a0", true, "center"),
+        () => { if (confirmDel === w.id) { deleteWorld(w); confirmDel = null; } else { confirmDel = w.id; notice = 'Tap x again to delete "' + w.name + '"'; } });
+    });
+    if (worlds.length > vis) {
+      button("up", listX + 230, listY, 20, 20, "^", { fn: () => worldListScroll = Math.max(0, worldListScroll - 1) });
+      button("dn", listX + 230, listY + 24, 20, 20, "v", { fn: () => worldListScroll = Math.min(worlds.length - vis, worldListScroll + 1) });
+    }
+    if (notice) text(notice, cx, UH - 44, "#ffff55", true, "center");
+    button("back", cx - 110, UH - 28, 108, 20, "Back", { fn: () => { notice = null; confirmDel = null; openScreen("title"); } });
+    button("create", cx + 2, UH - 28, 108, 20, "Create new", { fn: () => { notice = null; confirmDel = null; fName.value = nextWorldName(); fSeed.value = ""; newMode = "survival"; openScreen("create"); } });
+    return;
+  }
+  if (screen === "create") {
+    dirtBG();
+    text("Create New World", cx, 10, "#ffffff", true, "center");
+    text("World name", cx - 100, 28, "#a0a0a0", true); field(fName, cx - 100, 38, 200, 20);
+    text("Seed for the World Generator", cx - 100, 64, "#a0a0a0", true); field(fSeed, cx - 100, 74, 200, 20);
+    text("Leave blank for a random seed", cx - 100, 97, "#808080", false);
+    button("m_creative", cx - 100, 110, 98, 20, "Creative", { selected: newMode === "creative", fn: () => newMode = "creative" });
+    button("m_survival", cx + 2, 110, 98, 20, "Survival", { selected: newMode === "survival", fn: () => newMode = "survival" });
+    text(newMode === "creative" ? "Unlimited resources. Flying." : "Mine to collect blocks. Watch your health!", cx, 136, "#e0e0e0", true, "center");
+    button("c_back", cx - 100, UH - 28, 98, 20, "Back", { fn: () => openScreen("select") });
+    button("c_go", cx + 2, UH - 28, 98, 20, "Create World", { fn: () => createWorld() });
+    return;
+  }
+  if (screen === "generating") {
+    dirtBG();
+    text(genStage === 0 ? "Generating world" : "Building terrain", cx, UH / 2 - 16, "#ffffff", true, "center");
+    rect(cx - 50, UH / 2, 100, 2, "#808080"); rect(cx - 50, UH / 2, 100 * clamp(genProgress, 0, 1), 2, "#80ff80");
+    return;
+  }
+  if (screen === "pause") {
+    rect(0, 0, UW, UH, "rgba(0,0,0,.5)");
+    text("Game menu", cx, Math.max(10, UH / 2 - 66), "#ffffff", true, "center");
+    button("p_back", cx - 100, UH / 2 - 48, 200, 20, "Back to game", { fn: resume });
+    button("p_opt", cx - 100, UH / 2 - 24, 200, 20, "Options", { fn: () => { optionsFrom = "pause"; openScreen("options"); } });
+    button("p_quit", cx - 100, UH / 2, 200, 20, "Quit to title", { fn: () => { const ok = saveWorld(); notice = ok === false ? "Couldn't save: browser storage is full" : null; openScreen("title"); } });
+    text("Position: " + Math.floor(P.x) + ", " + Math.floor(P.y) + ", " + Math.floor(P.z), cx, UH / 2 + 30, "#a0a0a0", true, "center");
+    return;
+  }
+  if (screen === "dead") {
+    rect(0, 0, UW, UH, "rgba(110,0,0,.6)");
+    text("You died!", cx, UH / 2 - 52, "#ffffff", true, "center", 2);
+    button("d_respawn", cx - 100, UH / 2 - 8, 200, 20, "Respawn", { fn: () => { const s = findSpawn(); Object.assign(P, { x: s[0], y: s[1], z: s[2], hp: 20, vx: 0, vy: 0, vz: 0, inv: {}, fallStart: null }); openScreen("game"); lockMouse(); } });
+    button("d_title", cx - 100, UH / 2 + 16, 200, 20, "Main menu", { fn: () => { P.hp = 20; P.inv = {}; const s = findSpawn(); P.x = s[0]; P.y = s[1]; P.z = s[2]; saveWorld(); openScreen("title"); } });
+    return;
+  }
+  if (screen === "inventory") {
+    rect(0, 0, UW, UH, "rgba(0,0,0,.6)");
+    const list = mode === "creative" ? CREATIVE_LIST : Object.keys(P.inv).map(Number).filter((k) => P.inv[k] > 0);
+    const cols = clamp(Math.floor((UW - 20) / 22), 5, 9), rows = Math.ceil(Math.max(1, list.length) / cols);
+    const pw = cols * 22 + 10, ph = rows * 22 + 26, px = Math.round(cx - pw / 2), py = Math.round(Math.max(6, (UH - 34 - ph) / 2));
+    rect(px, py, pw, ph, "#c6c6c6"); rect(px, py, pw, 1, "#ffffff"); rect(px, py, 1, ph, "#ffffff"); rect(px, py + ph - 1, pw, 1, "#555555"); rect(px + pw - 1, py, 1, ph, "#555555");
+    text(mode === "creative" ? "Select block" : "Inventory", px + 6, py + 6, "#404040", false);
+    if (!list.length) text("Mine some blocks first!", cx, py + 22, "#404040", false, "center");
+    list.forEach((id, i) => {
+      const x = px + 5 + (i % cols) * 22, y = py + 18 + Math.floor(i / cols) * 22, hid = "inv_" + id;
+      rect(x, y, 20, 20, hover === hid ? "#c5c5ff" : "#8b8b8b"); rect(x, y, 20, 1, "#373737"); rect(x, y, 1, 20, "#373737");
+      blockIcon(id, x + 2, y + 2, 16);
+      if (mode === "survival") text(String(P.inv[id]), x + 19, y + 11, "#ffffff", true, "right");
+      hits.push({ id: hid, x, y, w: 20, h: 20, fn: () => { const at = P.hot.indexOf(id); if (at >= 0) P.slot = at; else P.hot[P.slot] = id; itemNameT = 2; resume(); } });
+    });
+    if (hover && hover.startsWith("inv_")) text(NAMES[+hover.slice(4)] || "", cx, py + ph + 4, "#ffffff", true, "center");
+    button("i_close", px + pw - 22, py + 3, 19, 12, "x", { fn: resume });
+    drawHotbar(true);
+    return;
+  }
+}
+function nextWorldName() { let n = 1, name = "My World"; const names = new Set(worlds.map((w) => w.name)); while (names.has(name)) name = "My World " + (++n); return name; }
+function saveOpt() { store.set("mcpe_options", OPT); }
+function deleteWorld(w) { worlds = worlds.filter((x) => x.id !== w.id); store.set("mcpe_worlds", worlds); store.del("mcpe_world_" + w.id); notice = 'Deleted "' + w.name + '"'; worldListScroll = 0; }
+function createWorld() {
+  const name = (fName.value.trim() || "My World").slice(0, 24), sd = fSeed.value.trim() ? seedNum(fSeed.value.trim()) : Math.floor(Math.random() * 2000000) + 1;
+  current = { id: Date.now().toString(36), name, seed: sd, mode: newMode, created: Date.now() };
+  mode = newMode; genStage = 0; genProgress = 0.05; openScreen("generating");
+  setTimeout(() => {
+    generate(sd); genStage = 1; genProgress = 0.5;
+    for (const c of chunks) c.dirty = true;
+    const s = findSpawn();
+    Object.assign(P, { x: s[0], y: s[1], z: s[2], vx: 0, vy: 0, vz: 0, yaw: Math.PI * 0.75, pitch: 0.15, hp: 20, air: 300, fly: false, inv: {}, slot: 0, fallStart: null });
+    P.hot = mode === "creative" ? [1, 2, 3, 4, 5, 6, 10, 11, 8] : [0, 0, 0, 0, 0, 0, 0, 0, 0];
+    buildAllThen(() => { saveWorld(); enterGame(); });
+  }, 60);
+}
+function loadWorld(w) {
+  const data = store.get("mcpe_world_" + w.id, null);
+  if (!data) { notice = "That world's data is missing."; return; }
+  current = w; mode = w.mode; genStage = 1; genProgress = 0; openScreen("generating");
+  setTimeout(() => {
+    decodeWorld(data); for (const c of chunks) c.dirty = true;
+    const p = w.player || {}, s = findSpawn();
+    Object.assign(P, { x: p.x ?? s[0], y: p.y ?? s[1], z: p.z ?? s[2], yaw: p.yaw ?? 0, pitch: p.pitch ?? 0, hp: p.hp ?? 20, inv: p.inv || {}, hot: p.hot || [1, 2, 3, 4, 5, 6, 10, 11, 8], slot: p.slot || 0, vx: 0, vy: 0, vz: 0, fly: false, air: 300, fallStart: null });
+    buildAllThen(enterGame);
+  }, 60);
+}
+function buildAllThen(done) {
+  const todo = chunks.map((c, i) => i).filter((i) => chunks[i].dirty);
+  let k = 0;
+  (function step() { const end = Math.min(todo.length, k + 6); for (; k < end; k++) buildChunk(todo[k]); genProgress = 0.5 + 0.5 * k / todo.length; if (k < todo.length) setTimeout(step, 0); else done(); })();
+}
+let autosaveT = 0;
+function enterGame() { openScreen("game"); lockMouse(); autosaveT = 0; itemNameT = 2; }
+function resume() { openScreen("game"); lockMouse(); }
+function lockMouse() { if (!isTouch && cv.requestPointerLock) try { const r = cv.requestPointerLock(); if (r && r.catch) r.catch(() => {}); } catch (e) {} }
+
+// ============================== in-game HUD ==============================
+const isTouch = "ontouchstart" in window || navigator.maxTouchPoints > 0;
+let itemNameT = 0;
+function hotbarPos() { return { x: Math.floor(UW / 2 - 91), y: UH - 23 }; }
+function drawHotbar(noButtons) {
+  const { x, y } = hotbarPos();
+  blit(0, 0, 182, 22, x, y);
+  for (let i = 0; i < 9; i++) {
+    const id = P.hot[i];
+    if (id && !(mode === "survival" && !P.inv[id])) {
+      blockIcon(id, x + 3 + i * 20, y + 3, 16);
+      if (mode === "survival") text(String(P.inv[id]), x + 3 + i * 20 + 17, y + 11, "#ffffff", true, "right");
+    }
+    if (!noButtons) hits.push({ id: "hot" + i, x: x + 1 + i * 20, y, w: 20, h: 22, fn: () => { P.slot = i; itemNameT = 2; } });
+  }
+  blit(0, 22, 24, 24, x - 1 + P.slot * 20, y - 1);
+  if (!noButtons) iconButton("invbtn", x + 184, y + 1, 20, 20, (bx, by) => { rect(bx, by, 20, 20, "rgba(0,0,0,.55)"); text("...", bx + 10, by + 5, "#ffffff", true, "center"); }, () => openScreen("inventory"));
+}
+// classic 9x9 heart, drawn as pixels
+const HEART = ["011000110", "111101111", "111111111", "111111111", "011111110", "001111100", "000111000", "000010000"];
+function drawHeart(x, y, fill) {
+  for (let r = 0; r < 8; r++) for (let c = 0; c < 9; c++) if (HEART[r][c] === "1") {
+    const nb = (rr, cc) => (HEART[rr] || "000000000")[cc] === "1";
+    const edge = !nb(r - 1, c) || !nb(r + 1, c) || !nb(r, c - 1) || !nb(r, c + 1);
+    let col = edge ? "#000000" : "#3b1111";
+    if (!edge && (fill === 1 || (fill === 0.5 && c < 5))) col = r === 1 && c > 1 && c < 4 ? "#ff9b9b" : "#e01e1e";
+    rect(x + c, y + r, 1, 1, col);
+  }
+}
+function drawHUDGame(headWater) {
+  hits = [];
+  if (headWater) rect(0, 0, UW, UH, "rgba(20,50,150,.35)");
+  if (P.hurtT > 0) rect(0, 0, UW, UH, `rgba(200,0,0,${P.hurtT})`);
+  if (!isTouch) { g2.globalCompositeOperation = "difference"; rect(UW / 2 - 4.5, UH / 2 - 0.5, 9, 1, "#ffffff"); rect(UW / 2 - 0.5, UH / 2 - 4.5, 1, 4, "#ffffff"); rect(UW / 2 - 0.5, UH / 2 + 0.5, 1, 4, "#ffffff"); g2.globalCompositeOperation = "source-over"; }
+  drawHotbar();
+  const { x, y } = hotbarPos();
+  if (mode === "survival") {
+    for (let i = 0; i < 10; i++) drawHeart(x + i * 8, y - 10 + (P.hp <= 4 && Math.random() < 0.3 ? 1 : 0), P.hp >= (i + 1) * 2 ? 1 : P.hp === i * 2 + 1 ? 0.5 : 0);
+    if (headWater) for (let i = 0; i < Math.ceil(Math.max(0, P.air) / 30); i++) { g2.fillStyle = "#cfe8ff"; g2.beginPath(); g2.arc((x + 177 - i * 8) * GS, (y - 6) * GS, 3.2 * GS, 0, 7); g2.fill(); g2.strokeStyle = "#1a3e8a"; g2.lineWidth = Math.max(1, GS * 0.7); g2.stroke(); }
+  }
+  if (itemNameT > 0 && P.hot[P.slot] && !(mode === "survival" && !P.inv[P.hot[P.slot]])) { g2.globalAlpha = Math.min(1, itemNameT); text(NAMES[P.hot[P.slot]] || "", UW / 2, y - (mode === "survival" ? 22 : 12), "#ffffff", true, "center"); g2.globalAlpha = 1; }
+  iconButton("pause", UW - 22, 2, 20, 20, (bx, by) => blit(200, 64, 20, 20, bx, by), () => openScreen("pause"));
+  if (mode === "creative" && P.fly) text("Flying", 4, 4, "#ffffff", true);
+  if (isTouch) drawTouch();
+}
+// touch: PE d-pad + jump from gui.png; drag to look; tap = place; hold = mine
+const touchBtns = {};
+function drawTouch() {
+  const s = 26, bx = 6, by = UH - 6 - s * 3 - 26;
+  const pads = [["tu", 0, 107, bx + s, by], ["tl", 26, 107, bx, by + s], ["td", 52, 107, bx + s, by + s * 2], ["tr", 78, 107, bx + s * 2, by + s], ["tj", 108, 107, bx + s, by + s]];
+  for (const [id, sx, sy, px, py] of pads) { g2.globalAlpha = touchBtns[id] !== undefined ? 1 : 0.6; blit(sx, sy, 26, 26, px, py, s, s); g2.globalAlpha = 1; hits.push({ id, x: px, y: py, w: s, h: s, touch: true }); }
+  if (mode === "creative") {
+    const fx = UW - 32, fy = UH - 62;
+    rect(fx, fy, 26, 26, P.fly ? "rgba(255,255,160,.45)" : "rgba(0,0,0,.35)"); text("Fly", fx + 13, fy + 9, "#ffffff", true, "center");
+    hits.push({ id: "tfly", x: fx, y: fy, w: 26, h: 26, fn: () => { P.fly = !P.fly; P.vy = 0; } });
+  }
+}
+
+// ============================== input ==============================
+const keys = {}, mouse = { l: false, r: false };
+let lastSpace = 0, placeRepeat = 0;
+const KEYS = { KeyW: "f", ArrowUp: "f", KeyS: "b", ArrowDown: "b", KeyA: "l", ArrowLeft: "l", KeyD: "r", ArrowRight: "r", Space: "jump", ShiftLeft: "sneak", ShiftRight: "sneak", ControlLeft: "sprint" };
 addEventListener("keydown", (e) => {
-  if (!playing) return;
-  const k = KEYS[e.code];
-  if (k) { e.preventDefault(); if (k === "jump" && !keys.jump) { const now = performance.now(); if (mode === "creative" && now - lastSpace < 300) { P.fly = !P.fly; P.vy = 0; } lastSpace = now; } keys[k] = true; }
-  if (/^Digit[1-9]$/.test(e.code)) P.slot = Math.min(HOTBAR.length - 1, +e.code.slice(5) - 1 + hotbarPage * 9);
-  if (e.code === "KeyE") { hotbarPage = (hotbarPage + 1) % Math.ceil(HOTBAR.length / 9); P.slot = hotbarPage * 9; }
-  if (e.code === "Escape" || e.code === "KeyP") pause(true);
+  au();
+  if (document.activeElement === fName || document.activeElement === fSeed) { if (e.code === "Enter" && screen === "create") createWorld(); return; }
+  if (screen === "game") {
+    const k = KEYS[e.code];
+    if (k) { e.preventDefault(); if (k === "jump" && !keys.jump) { const now = performance.now(); if (mode === "creative" && now - lastSpace < 280) { P.fly = !P.fly; P.vy = 0; } lastSpace = now; } keys[k] = true; }
+    if (/^Digit[1-9]$/.test(e.code)) { P.slot = +e.code.slice(5) - 1; itemNameT = 2; }
+    if (e.code === "KeyE") openScreen("inventory");
+    if (e.code === "KeyQ" && mode === "survival") { const id = P.hot[P.slot]; if (P.inv[id] > 0) { P.inv[id]--; if (!P.inv[id]) delete P.inv[id]; sfx("pop"); } }
+    if (e.code === "Escape" || e.code === "KeyP") openScreen("pause");
+  } else if (e.code === "Escape" || e.code === "KeyE") {
+    if (screen === "inventory" || screen === "pause") resume();
+    else if (screen === "options") optionsFrom === "pause" ? openScreen("pause") : openScreen("title");
+    else if (screen === "create") openScreen("select");
+    else if (screen === "select") openScreen("title");
+  } else if (e.code === "Enter" && screen === "splash") openScreen("title");
 });
 addEventListener("keyup", (e) => { const k = KEYS[e.code]; if (k) keys[k] = false; });
-let hotbarPage = 0;
-cv.addEventListener("mousedown", (e) => {
-  au();
-  if (!playing) return;
-  if (document.pointerLockElement !== cv && !isTouch) { cv.requestPointerLock(); return; }
-  if (e.button === 0) breakBlock(); if (e.button === 2) placeBlock();
-});
-cv.addEventListener("contextmenu", (e) => e.preventDefault());
+function uiAt(px, py) { const x = px / GS, y = py / GS; for (let i = hits.length - 1; i >= 0; i--) { const h = hits[i]; if (x >= h.x && x < h.x + h.w && y >= h.y && y < h.y + h.h) return h; } return null; }
+let lastTouchT = 0;
+hud.addEventListener("mousemove", (e) => { if (screen !== "game" || document.pointerLockElement !== cv) { const h = uiAt(e.clientX, e.clientY); hover = h ? h.id : null; } });
 addEventListener("mousemove", (e) => {
-  if (document.pointerLockElement !== cv) return;
-  P.yaw -= e.movementX * 0.0025; P.pitch = Math.max(-1.55, Math.min(1.55, P.pitch + e.movementY * 0.0025));
+  if (screen !== "game" || document.pointerLockElement !== cv) return;
+  P.yaw -= e.movementX * 0.0022 * OPT.sens; P.pitch = clamp(P.pitch + e.movementY * 0.0022 * OPT.sens * (OPT.invertY ? -1 : 1), -1.55, 1.55);
 });
-addEventListener("wheel", (e) => { if (!playing) return; P.slot = (P.slot + (e.deltaY > 0 ? 1 : HOTBAR.length - 1)) % HOTBAR.length; hotbarPage = Math.floor(P.slot / 9); });
-document.addEventListener("pointerlockchange", () => { if (playing && document.pointerLockElement !== cv && !isTouch) pause(true); });
-
-// touch: drag on the right half to look, buttons for the rest
-const isTouch = "ontouchstart" in window || navigator.maxTouchPoints > 0;
-if (isTouch) document.body.classList.add("touch");
-let lookId = null, lx = 0, ly = 0;
-cv.addEventListener("touchstart", (e) => { au(); for (const t of e.changedTouches) if (lookId === null) { lookId = t.identifier; lx = t.clientX; ly = t.clientY; } }, { passive: true });
-cv.addEventListener("touchmove", (e) => { for (const t of e.changedTouches) if (t.identifier === lookId) { P.yaw -= (t.clientX - lx) * 0.006; P.pitch = Math.max(-1.55, Math.min(1.55, P.pitch + (t.clientY - ly) * 0.006)); lx = t.clientX; ly = t.clientY; } }, { passive: true });
-cv.addEventListener("touchend", (e) => { for (const t of e.changedTouches) if (t.identifier === lookId) lookId = null; });
-for (const [id, k] of [["tu", "f"], ["td", "b"], ["tl", "l"], ["tr", "r"], ["tj", "jump"]]) {
-  const el = document.getElementById(id);
-  el.addEventListener("pointerdown", (e) => { e.preventDefault(); au(); keys[k] = true; });
-  for (const ev of ["pointerup", "pointercancel", "pointerleave"]) el.addEventListener(ev, () => { keys[k] = false; });
-}
-document.getElementById("tbk").addEventListener("pointerdown", (e) => { e.preventDefault(); breakBlock(); });
-document.getElementById("tpl").addEventListener("pointerdown", (e) => { e.preventDefault(); placeBlock(); });
-document.getElementById("tfl").addEventListener("pointerdown", (e) => { e.preventDefault(); if (mode === "creative") { P.fly = !P.fly; P.vy = 0; } });
-
-// ---------- menus ----------
-const titleEl = document.getElementById("title"), pauseEl = document.getElementById("pause");
-function start(m) {
-  au(); mode = m; generate(Math.floor(Math.random() * 100000) + 1);
-  for (const c of chunks) c.dirty = true;
-  spawn(); P.yaw = 0; P.pitch = 0.2;
-  titleEl.classList.add("hidden"); playing = true;
-  if (!isTouch) cv.requestPointerLock();
-  tone(523, 0.1, "square", 0.05);
-}
-function pause(on) {
-  if (!playing && on) return;
-  if (on) { playing = false; pauseEl.classList.remove("hidden"); for (const k in keys) keys[k] = false; if (document.pointerLockElement) document.exitPointerLock(); }
-  else { pauseEl.classList.add("hidden"); playing = true; if (!isTouch) cv.requestPointerLock(); }
-}
-document.getElementById("bCreative").onclick = () => start("creative");
-document.getElementById("bSurvival").onclick = () => start("survival");
-document.getElementById("bResume").onclick = () => pause(false);
-document.getElementById("bQuit").onclick = () => { pauseEl.classList.add("hidden"); titleEl.classList.remove("hidden"); playing = false; };
-// title backdrop world
-generate(4242); P.x = 20; P.y = 36; P.z = 20; P.yaw = -2.3; P.pitch = 0.25;
-
-// ---------- HUD ----------
-const hud = document.getElementById("hud"), hctx = hud.getContext("2d");
-function drawHUD(headWater) {
-  const w = innerWidth, h = innerHeight;
-  if (hud.width !== w || hud.height !== h) { hud.width = w; hud.height = h; }
-  hctx.clearRect(0, 0, w, h); hctx.imageSmoothingEnabled = false;
-  if (headWater) { hctx.fillStyle = "rgba(20,60,160,.35)"; hctx.fillRect(0, 0, w, h); }
-  if (flash > 0) { hctx.fillStyle = `rgba(200,0,0,${flash})`; hctx.fillRect(0, 0, w, h); }
-  if (!playing) return;
-  // crosshair
-  hctx.fillStyle = "rgba(255,255,255,.85)"; hctx.fillRect(w / 2 - 9, h / 2 - 1, 18, 2); hctx.fillRect(w / 2 - 1, h / 2 - 9, 2, 18);
-  // hotbar from the GUI sheet (182x22 strip at the top-left of gui.png), 9 slots
-  const sc = Math.max(2, Math.min(3, Math.floor(w / 300)));
-  const hx = w / 2 - 91 * sc, hy = h - 26 * sc;
-  if (guiImg.complete) hctx.drawImage(guiImg, 0, 0, 182, 22, hx, hy, 182 * sc, 22 * sc);
-  const page = Math.floor(P.slot / 9);
-  for (let i = 0; i < 9; i++) {
-    const id = HOTBAR[page * 9 + i]; if (!id) continue;
-    const t = tileOf(id, 2);
-    if (atlas2d.complete) hctx.drawImage(atlas2d, (t % 16) * 16, Math.floor(t / 16) * 16, 16, 16, hx + (3 + i * 20) * sc, hy + 3 * sc, 16 * sc, 16 * sc);
+hud.addEventListener("mousedown", (e) => {
+  au(); if (performance.now() - lastTouchT < 800) return;   // ignore mouse events synthesized from touches
+  const locked = document.pointerLockElement === cv;
+  if (!locked) { const h = uiAt(e.clientX, e.clientY); if (h && h.fn) { sfx("click"); h.fn(); return; } }
+  if (screen === "game") {
+    if (!locked && !isTouch) { lockMouse(); return; }
+    if (e.button === 0) mouse.l = true;
+    if (e.button === 2) { placeBlock(); mouse.r = true; placeRepeat = 0.3; }
+    if (e.button === 1) { const r = raycast(); if (r) { const at = P.hot.indexOf(r.id); if (at >= 0) P.slot = at; else if (mode === "creative") P.hot[P.slot] = r.id; itemNameT = 2; } }
   }
-  const sel = P.slot % 9;
-  if (guiImg.complete) hctx.drawImage(guiImg, 0, 22, 24, 24, hx + (-1 + sel * 20) * sc, hy - 1 * sc, 24 * sc, 24 * sc);
-  hctx.font = `bold ${7 * sc}px "Courier New", monospace`; hctx.fillStyle = "#fff"; hctx.textAlign = "center";
-  const nameOf = Object.keys(B).find((k) => B[k] === HOTBAR[P.slot]) || "";
-  hctx.fillText(nameOf.toLowerCase().replace(/^./, (c) => c.toUpperCase()), w / 2, hy - 6 * sc);
-  hctx.textAlign = "left";
-  // hearts (survival)
-  if (mode === "survival") {
-    for (let i = 0; i < 10; i++) {
-      const full = P.hp >= (i + 1) * 2, half = P.hp === i * 2 + 1;
-      drawHeart(hx + i * 8 * sc, hy - 16 * sc, 3 * sc / 3 * 2.6, full ? 1 : half ? 0.5 : 0);
-    }
-    if (headWater) for (let i = 0; i < Math.ceil(P.air / 30); i++) { hctx.fillStyle = "#9cf"; hctx.beginPath(); hctx.arc(hx + 182 * sc - 8 - i * 8 * sc, hy - 12 * sc, 3 * sc, 0, 7); hctx.fill(); }
-  } else if (P.fly) { hctx.fillStyle = "#fff"; hctx.fillText("Flying", 10, 20); }
-  hctx.fillStyle = "rgba(255,255,255,.8)"; hctx.font = "12px monospace";
-  hctx.fillText(`${mode === "creative" ? "Creative" : "Survival"}  ·  XYZ ${P.x.toFixed(0)} ${P.y.toFixed(0)} ${P.z.toFixed(0)}  ·  E: next block page`, 10, h - 8 - (isTouch ? 220 : 0));
+});
+addEventListener("mouseup", (e) => { if (e.button === 0) mouse.l = false; if (e.button === 2) mouse.r = false; });
+hud.addEventListener("contextmenu", (e) => e.preventDefault());
+addEventListener("wheel", (e) => { if (screen === "game") { P.slot = (P.slot + (e.deltaY > 0 ? 1 : 8)) % 9; itemNameT = 2; } else if (screen === "select") worldListScroll = clamp(worldListScroll + Math.sign(e.deltaY), 0, Math.max(0, worlds.length - 1)); });
+document.addEventListener("pointerlockchange", () => { if (screen === "game" && document.pointerLockElement !== cv && !isTouch) openScreen("pause"); });
+const touches = new Map();
+hud.addEventListener("touchstart", (e) => {
+  e.preventDefault(); au(); lastTouchT = performance.now();
+  for (const t of e.changedTouches) {
+    const h = uiAt(t.clientX, t.clientY);
+    if (h && h.touch) { touchBtns[h.id] = t.identifier; touches.set(t.identifier, { btn: h.id }); continue; }
+    if (h) { pressedBtn = h.id; touches.set(t.identifier, { ui: h }); continue; }
+    if (screen === "game") touches.set(t.identifier, { look: true, x: t.clientX, y: t.clientY, t0: performance.now(), moved: 0 });
+  }
+  syncTouchKeys();
+}, { passive: false });
+hud.addEventListener("touchmove", (e) => {
+  e.preventDefault(); lastTouchT = performance.now();
+  for (const t of e.changedTouches) {
+    const s = touches.get(t.identifier); if (!s) continue;
+    if (s.look) { const dx = t.clientX - s.x, dy = t.clientY - s.y; P.yaw -= dx * 0.008 * OPT.sens; P.pitch = clamp(P.pitch + dy * 0.008 * OPT.sens * (OPT.invertY ? -1 : 1), -1.55, 1.55); s.x = t.clientX; s.y = t.clientY; s.moved += Math.abs(dx) + Math.abs(dy); }
+    if (s.btn) { const h = uiAt(t.clientX, t.clientY); if (!h || h.id !== s.btn) { delete touchBtns[s.btn]; if (h && h.touch) { s.btn = h.id; touchBtns[h.id] = t.identifier; } } }
+  }
+  syncTouchKeys();
+}, { passive: false });
+const endTouch = (e) => {
+  lastTouchT = performance.now();
+  for (const t of e.changedTouches) {
+    const s = touches.get(t.identifier); if (!s) continue;
+    if (s.btn) delete touchBtns[s.btn];
+    if (s.ui) { const h = uiAt(t.clientX, t.clientY); if (h && h.id === s.ui.id && h.fn) { sfx("click"); h.fn(); } pressedBtn = null; }
+    if (s.look && screen === "game" && performance.now() - s.t0 < 260 && s.moved < 12) placeBlock();
+    touches.delete(t.identifier);
+  }
+  syncTouchKeys();
+};
+hud.addEventListener("touchend", endTouch); hud.addEventListener("touchcancel", endTouch);
+function syncTouchKeys() {
+  if (screen !== "game") return;
+  keys.f = touchBtns.tu !== undefined; keys.b = touchBtns.td !== undefined; keys.l = touchBtns.tl !== undefined; keys.r = touchBtns.tr !== undefined;
+  const j = touchBtns.tj !== undefined;
+  if (j && !keys.jump && mode === "creative") { const now = performance.now(); if (now - lastSpace < 300) { P.fly = !P.fly; P.vy = 0; } lastSpace = now; }
+  keys.jump = j;
 }
-function drawHeart(x, y, s, fill) {
-  hctx.fillStyle = "#300"; heartPath(x, y, s + 1); hctx.fill();
-  hctx.fillStyle = "#555"; heartPath(x, y, s); hctx.fill();
-  if (fill > 0) { hctx.save(); hctx.beginPath(); hctx.rect(x - s * 2, y - s * 2, s * 4 * fill, s * 5); hctx.clip(); hctx.fillStyle = "#e01818"; heartPath(x, y, s); hctx.fill(); hctx.restore(); }
-}
-function heartPath(x, y, s) { hctx.beginPath(); hctx.moveTo(x, y + s * 1.6); hctx.lineTo(x - s * 1.8, y - s * 0.1); hctx.arc(x - s * 0.9, y - s * 0.4, s, Math.PI, 0); hctx.arc(x + s * 0.9, y - s * 0.4, s, Math.PI, 0); hctx.closePath(); }
+function touchMining() { for (const s of touches.values()) if (s.look && performance.now() - s.t0 > 260 && s.moved < 24) return true; return false; }
 
-// ---------- frame ----------
-let last = performance.now(), tAcc = 0;
+// ============================== main loop ==============================
+let last = performance.now();
 function frame(now) {
-  const dt = Math.min(0.05, (now - last) / 1000); last = now; tAcc += dt;
-  if (cv.width !== innerWidth * devicePixelRatio || cv.height !== innerHeight * devicePixelRatio) { cv.width = innerWidth * devicePixelRatio; cv.height = innerHeight * devicePixelRatio; }
-  let headWater = false;
-  if (playing) headWater = physics(dt);
-  else if (!titleEl.classList.contains("hidden")) { P.yaw += dt * 0.08; }
-  if (flash > 0) flash -= dt;
-  // rebuild a few dirty chunks per frame, nearest first
-  const pcx = P.x / CH, pcz = P.z / CH;
-  const dirty = chunks.map((c, i) => [c, i]).filter(([c]) => c.dirty).sort((a, b) => Math.hypot(a[1] % NCX - pcx, Math.floor(a[1] / NCX) - pcz) - Math.hypot(b[1] % NCX - pcx, Math.floor(b[1] / NCX) - pcz));
-  for (let k = 0; k < Math.min(dirty.length, playing ? 3 : 8); k++) buildChunk(dirty[k][1]);
-  // render
-  const sky = headWater ? [0.1, 0.2, 0.55] : [0.53, 0.75, 1.0];
-  gl.viewport(0, 0, cv.width, cv.height); gl.clearColor(...sky, 1); gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
-  gl.enable(gl.DEPTH_TEST); gl.enable(gl.CULL_FACE); gl.cullFace(gl.BACK);
-  const proj = persp(1.2, cv.width / cv.height, 0.05, 140);
-  const M = mul(proj, view(P.x, P.y + EYE, P.z, P.yaw, P.pitch));
-  gl.uniformMatrix4fv(L.m, false, new Float32Array(M));
-  gl.uniform3fv(L.fogc, sky); gl.uniform1f(L.fogd, headWater ? 18 : 100); gl.uniform1f(L.under, headWater ? 1 : 0);
-  gl.bindTexture(gl.TEXTURE_2D, tex);
-  gl.disable(gl.BLEND);
-  for (const c of chunks) if (c.n) { bindAttribs(c.buf); gl.drawArrays(gl.TRIANGLES, 0, c.n); }
-  gl.disable(gl.CULL_FACE); gl.enable(gl.BLEND); gl.blendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA); gl.depthMask(false);
-  for (const c of chunks) if (c.wn) { bindAttribs(c.wbuf); gl.drawArrays(gl.TRIANGLES, 0, c.wn); }
-  gl.depthMask(true);
-  // block outline + particles drawn via the 2D HUD (projected)
-  drawHUD(headWater);
-  if (playing) {
-    const h = raycast();
-    if (h) outline(M, h.x, h.y, h.z);
-    for (const p of particles) {
-      p.t += dt; p.vy -= 12 * dt; p.x += p.vx * dt; p.y += p.vy * dt; p.z += p.vz * dt;
-      const s = project(M, p.x, p.y, p.z); if (!s) continue;
-      const sz = Math.max(2, 24 / s[2]);
-      hctx.drawImage(atlas2d, (p.tile % 16) * 16 + 4, Math.floor(p.tile / 16) * 16 + 4, 4, 4, s[0] - sz / 2, s[1] - sz / 2, sz, sz);
-    }
-    particles = particles.filter((p) => p.t < 0.8);
+  const dt = Math.min(0.05, (now - last) / 1000); last = now; screenT += dt;
+  if (!IM.font._m && IM.font.complete && IM.font.naturalWidth) { measureFont(); IM.font._m = true; }
+  if (hud.width !== innerWidth || hud.height !== innerHeight) resize();
+  let head = false, crack = null;
+  if (screen === "game") {
+    head = physics(dt);
+    crack = mineTick(dt, mouse.l || touchMining());
+    if (mouse.r) { placeRepeat -= dt; if (placeRepeat <= 0) { placeBlock(); placeRepeat = 0.22; } }
+    autosaveT += dt; if (autosaveT > 45) { saveWorld(); autosaveT = 0; }
+    if (itemNameT > 0) itemNameT -= dt;
+    if (swing > 0) swing -= dt;
   }
+  g2.setTransform(1, 0, 0, 1, 0, 0); g2.clearRect(0, 0, hud.width, hud.height); g2.imageSmoothingEnabled = false;
+  const showWorld = gl && ["game", "pause", "dead", "inventory"].includes(screen) || (gl && screen === "options" && optionsFrom === "pause");
+  if (!gl) { dirtBG(); text("Sorry, this browser doesn't support WebGL.", UW / 2, UH / 2, "#ffffff", true, "center"); requestAnimationFrame(frame); return; }
+  const sky = head ? [0.05, 0.12, 0.45] : [0.49, 0.67, 1.0];
+  gl.viewport(0, 0, cv.width, cv.height); gl.clearColor(sky[0], sky[1], sky[2], 1); gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
+  if (showWorld) {
+    const dirty = []; for (let i = 0; i < chunks.length; i++) if (chunks[i].dirty) dirty.push(i);
+    const pcx = P.x / CH, pcz = P.z / CH; dirty.sort((a, b) => Math.hypot(a % NCX - pcx, Math.floor(a / NCX) - pcz) - Math.hypot(b % NCX - pcx, Math.floor(b / NCX) - pcz));
+    for (let k = 0; k < Math.min(dirty.length, 2); k++) buildChunk(dirty[k]);
+    gl.enable(gl.DEPTH_TEST); gl.enable(gl.CULL_FACE); gl.cullFace(gl.BACK); gl.disable(gl.BLEND);
+    const bobY = Math.abs(Math.sin(P.bob)) * 0.06, bobX = Math.cos(P.bob) * 0.03;
+    const far = [48, 80, 120][OPT.dist];
+    const proj = persp(1.22, cv.width / cv.height, 0.05, far + 30);
+    const M = mul(proj, view(P.x + bobX * Math.cos(P.yaw), P.y + EYE + bobY - (keys.sneak && !P.fly ? 0.12 : 0), P.z - bobX * Math.sin(P.yaw), P.yaw, -P.pitch));
+    gl.useProgram(prog);
+    gl.uniformMatrix4fv(L.m, false, new Float32Array(M)); gl.uniform3fv(L.fogc, sky); gl.uniform1f(L.fogd, head ? 14 : far); gl.uniform1f(L.alphaMul, 1);
+    gl.bindTexture(gl.TEXTURE_2D, tex);
+    for (const c of chunks) if (c.n) { bindAttribs(c.buf); gl.drawArrays(gl.TRIANGLES, 0, c.n); }
+    gl.enable(gl.BLEND); gl.blendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA);
+    if (crack !== null && mine.active) { gl.depthMask(false); gl.blendFunc(gl.DST_COLOR, gl.ZERO); drawCrack(mine.x, mine.y, mine.z, crack); gl.blendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA); gl.depthMask(true); }
+    gl.disable(gl.CULL_FACE); gl.depthMask(false); gl.uniform1f(L.alphaMul, 0.78);
+    for (const c of chunks) if (c.wn) { bindAttribs(c.wbuf); gl.drawArrays(gl.TRIANGLES, 0, c.wn); }
+    if (cloudBuf) { const off = (now / 1000) * 0.6 % 144; gl.uniformMatrix4fv(L.m, false, new Float32Array(mul(M, [1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, off - 48, 0, 0, 1]))); gl.uniform1f(L.fogd, 400); bindAttribs(cloudBuf); gl.drawArrays(gl.TRIANGLES, 0, cloudN); }
+    gl.depthMask(true); gl.uniform1f(L.alphaMul, 1);
+    const hb = screen === "game" ? raycast() : null;
+    if (hb) outline(M, hb.x, hb.y, hb.z);
+    for (const p of particles) {
+      p.t += dt; p.vy -= 14 * dt; p.x += p.vx * dt; p.y += p.vy * dt; p.z += p.vz * dt;
+      const s = project(M, p.x, p.y, p.z); if (!s) continue; const sz = Math.max(2, 26 / s[2]);
+      g2.drawImage(IM.terrain, (p.tile % 16) * 16 + p.ox, Math.floor(p.tile / 16) * 16 + p.oy, 4, 4, s[0] - sz / 2, s[1] - sz / 2, sz, sz);
+    }
+    particles = particles.filter((p) => p.t < 0.9);
+    if (screen === "game") drawHUDGame(head); else drawScreen();
+  } else drawScreen();
   requestAnimationFrame(frame);
 }
 function project(M, x, y, z) {
   const cx = M[0] * x + M[4] * y + M[8] * z + M[12], cy = M[1] * x + M[5] * y + M[9] * z + M[13], cw = M[3] * x + M[7] * y + M[11] * z + M[15];
   if (cw <= 0.05) return null;
-  return [(cx / cw * 0.5 + 0.5) * innerWidth, (1 - (cy / cw * 0.5 + 0.5)) * innerHeight, cw];
+  return [(cx / cw * 0.5 + 0.5) * hud.width, (1 - (cy / cw * 0.5 + 0.5)) * hud.height, cw];
 }
 function outline(M, x, y, z) {
-  const c = [[0, 0, 0], [1, 0, 0], [1, 0, 1], [0, 0, 1], [0, 1, 0], [1, 1, 0], [1, 1, 1], [0, 1, 1]].map(([a, b, d]) => project(M, x + a, y + b, z + d));
+  const e = 0.002, c = [[0, 0, 0], [1, 0, 0], [1, 0, 1], [0, 0, 1], [0, 1, 0], [1, 1, 0], [1, 1, 1], [0, 1, 1]].map(([a, b, d]) => project(M, x + a * (1 + 2 * e) - e, y + b * (1 + 2 * e) - e, z + d * (1 + 2 * e) - e));
   if (c.some((v) => !v)) return;
-  hctx.strokeStyle = "rgba(0,0,0,.7)"; hctx.lineWidth = 2; hctx.beginPath();
-  for (const [a, b] of [[0, 1], [1, 2], [2, 3], [3, 0], [4, 5], [5, 6], [6, 7], [7, 4], [0, 4], [1, 5], [2, 6], [3, 7]]) { hctx.moveTo(c[a][0], c[a][1]); hctx.lineTo(c[b][0], c[b][1]); }
-  hctx.stroke();
+  g2.strokeStyle = "rgba(0,0,0,.65)"; g2.lineWidth = Math.max(1.5, GS * 0.75); g2.beginPath();
+  for (const [a, b] of [[0, 1], [1, 2], [2, 3], [3, 0], [4, 5], [5, 6], [6, 7], [7, 4], [0, 4], [1, 5], [2, 6], [3, 7]]) { g2.moveTo(c[a][0], c[a][1]); g2.lineTo(c[b][0], c[b][1]); }
+  g2.stroke();
 }
+addEventListener("beforeunload", () => { if (["game", "pause", "inventory"].includes(screen)) saveWorld(); });
+document.addEventListener("visibilitychange", () => { if (document.hidden && ["game", "pause", "inventory"].includes(screen)) saveWorld(); });
 requestAnimationFrame(frame);
-if (location.hash === "#debug") window.__mc = { P, start, get playing() { return playing; }, breakBlock, placeBlock, raycast, get, keys };
+if (location.hash === "#debug") window.__mc = { P, keys, mouse, get screen() { return screen; }, openScreen, createWorld, raycast, placeBlock, get worlds() { return worlds; }, fName, setMode: (m) => newMode = m, get hits() { return hits; }, get mode() { return mode; } };
 })();
 </script>
 </body>
