@@ -1,0 +1,126 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Game Launcher</title>
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<style>
+  *{box-sizing:border-box}
+  body{margin:0;min-height:100vh;font-family:"Trebuchet MS",system-ui,sans-serif;color:#eef;
+    background:radial-gradient(circle at 50% -20%,#2b3a8a,#0b0f2a 70%);}
+  header{padding:28px 20px 8px;text-align:center}
+  h1{margin:0;font-size:40px;letter-spacing:3px;text-shadow:0 4px 0 #000a}
+  .sub{opacity:.7;margin-top:6px}
+  .grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:18px;
+    max-width:1100px;margin:24px auto;padding:0 20px}
+  .tile{position:relative;height:170px;border-radius:16px;cursor:pointer;overflow:hidden;
+    border:3px solid #fff3;box-shadow:0 8px 20px #0008;transition:transform .12s,border-color .12s;
+    display:flex;flex-direction:column;justify-content:flex-end;padding:14px;outline:none}
+  .tile:hover,.tile:focus{transform:translateY(-4px) scale(1.03);border-color:#fff}
+  .tile .ico{position:absolute;top:14px;left:14px;font-size:54px;filter:drop-shadow(0 3px 0 #0006)}
+  .tile b{font-size:20px;text-shadow:0 2px 0 #0009}
+  .tile span{font-size:13px;opacity:.85}
+  .tag{position:absolute;top:12px;right:12px;font-size:11px;background:#000a;padding:3px 7px;border-radius:8px}
+  #player{display:none;position:fixed;inset:0;background:#000e;z-index:9;flex-direction:column}
+  #bar{display:flex;gap:10px;align-items:center;padding:10px 14px;background:#111a3a}
+  #bar button,#bar label{background:#3a5bd9;color:#fff;border:0;border-radius:8px;padding:8px 14px;
+    font:inherit;cursor:pointer}
+  #bar .x{margin-left:auto;background:#c33}
+  #title{font-weight:bold}
+  #stage{flex:1;display:flex;align-items:center;justify-content:center;overflow:hidden}
+  #stage iframe{width:100%;height:100%;border:0;background:#000}
+  #stage ruffle-player,#stage ruffle-embed{width:min(100%,960px);height:min(100%,720px)}
+  #msg{opacity:.8;text-align:center;padding:20px;max-width:520px;line-height:1.5}
+  input[type=file]{display:none}
+  footer{text-align:center;opacity:.5;font-size:12px;padding:20px}
+</style>
+</head>
+<body>
+<header>
+  <h1>🎮 GAME LAUNCHER</h1>
+  <div class="sub">Click a game to play · ✕ Back (or Esc) to return</div>
+</header>
+<div class="grid" id="grid"></div>
+<footer>Everything runs from this folder — just double-click index.html.</footer>
+
+<div id="player">
+  <div id="bar">
+    <span id="title"></span>
+    <label id="pick" style="display:none">Open .swf…<input type="file" id="file" accept=".swf"></label>
+    <button id="full">Fullscreen</button>
+    <button class="x" id="close">✕ Back</button>
+  </div>
+  <div id="stage"></div>
+</div>
+
+<script>
+var GAMES = [
+  {name:"Plants vs Zombies DS", dir:"Plants vs Zombies DS", ico:"🌻", col:"#3c8d2f,#1d4d16", note:"Lawn defense"},
+  {name:"Sonic",                dir:"Sonic",                ico:"💨", col:"#2f62d9,#14286b", note:"Green Hill · Acts 1–3", tag:"BETA"},
+  {name:"Flappy Birds",         dir:"Flappy Birds",         ico:"🐤", col:"#4ec0ca,#1f7f88", note:"Tap to flap"},
+  {name:"Minecraft Pocket Edition", dir:"Minecraft Pocket Edition", ico:"⛏️", col:"#7a5a3a,#3b2a1a", note:"Survival & Creative"},
+  {name:"SWF Player",           swf:true,                   ico:"⚡", col:"#c0392b,#5e1a12", note:"Play any .swf file you have"}
+];
+
+var grid=document.getElementById('grid'), player=document.getElementById('player'),
+    stage=document.getElementById('stage'), title=document.getElementById('title'),
+    pick=document.getElementById('pick'), file=document.getElementById('file');
+
+GAMES.forEach(function(g){
+  var t=document.createElement('div'); t.className='tile'; t.tabIndex=0;
+  t.style.background='linear-gradient(160deg,'+g.col+')';
+  t.innerHTML='<div class="ico">'+g.ico+'</div>'+(g.tag?'<div class="tag">'+g.tag+'</div>':'')+
+    '<b>'+g.name+'</b><span>'+g.note+'</span>';
+  t.onclick=function(){ open(g); };
+  t.onkeydown=function(e){ if(e.key==='Enter') open(g); };
+  grid.appendChild(t);
+});
+
+function open(g){
+  stage.innerHTML=''; title.textContent=g.name; player.style.display='flex';
+  if(g.swf){ pick.style.display=''; swfIntro(); return; }
+  pick.style.display='none';
+  var f=document.createElement('iframe');
+  f.src=encodeURI(g.dir)+'/index.html'; f.allow='autoplay; fullscreen';
+  f.onload=function(){ try{ f.contentWindow.addEventListener('keydown',function(e){ if(e.key==='Escape'&&!document.fullscreenElement) close(); }); }catch(e){} };
+  stage.appendChild(f); setTimeout(function(){ try{f.focus();}catch(e){} },100);
+}
+function close(){ player.style.display='none'; stage.innerHTML=''; }
+document.getElementById('close').onclick=close;
+document.getElementById('full').onclick=function(){
+  var el=stage.firstElementChild||stage; (el.requestFullscreen||el.webkitRequestFullscreen||function(){}).call(el);
+};
+addEventListener('keydown',function(e){ if(e.key==='Escape'&&player.style.display==='flex'&&!document.fullscreenElement) close(); });
+
+/* ---------- SWF player (uses the Ruffle Flash emulator) ---------- */
+var ruffleReady=null;
+function loadRuffle(){
+  if(ruffleReady) return ruffleReady;
+  ruffleReady=new Promise(function(res,rej){
+    var s=document.createElement('script');
+    s.src='https://unpkg.com/@ruffle-rs/ruffle';
+    s.onload=function(){ res(); }; s.onerror=function(){ ruffleReady=null; rej(); };
+    document.head.appendChild(s);
+  });
+  return ruffleReady;
+}
+function swfIntro(){
+  stage.innerHTML='<div id="msg">Click <b>Open .swf…</b> above and pick a Flash game file from your computer.'+
+    '<br><br>Flash is played with the free Ruffle emulator, which loads from the internet the first time.</div>';
+}
+file.onchange=function(){
+  var f=file.files[0]; if(!f) return;
+  title.textContent='SWF Player — '+f.name;
+  stage.innerHTML='<div id="msg">Loading Flash player…</div>';
+  Promise.all([loadRuffle(), f.arrayBuffer()]).then(function(r){
+    var ruffle=window.RufflePlayer.newest(), p=ruffle.createPlayer();
+    stage.innerHTML=''; stage.appendChild(p);
+    p.load({data:r[1], autoplay:'on', unmuteOverlay:'hidden', letterbox:'on'});
+  }).catch(function(){
+    stage.innerHTML='<div id="msg">Couldn\'t load the Flash player. Check your internet connection and try again.</div>';
+  });
+  file.value='';
+};
+</script>
+</body>
+</html>
