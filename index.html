@@ -68,18 +68,6 @@ body{margin:0;background:var(--bg);color:var(--text);font-family:'Inter',system-
 .sw{width:46px;height:26px;border-radius:30px;background:#333;position:relative;cursor:pointer;transition:.3s;flex-shrink:0}
 .sw::after{content:'';position:absolute;top:3px;left:3px;width:20px;height:20px;border-radius:50%;background:#fff;transition:.3s}
 .sw.on{background:#fff}.sw.on::after{left:23px;background:#000}
-.dock-wrap{position:fixed;bottom:35px;left:50%;transform:translateX(-50%);display:flex;align-items:center;gap:15px;z-index:6}
-.dock{background:var(--glass);backdrop-filter:blur(15px);-webkit-backdrop-filter:blur(15px);border:1px solid var(--border);border-radius:80px;display:flex;align-items:center;padding:10px 14px;box-shadow:0 30px 60px rgba(0,0,0,.6)}
-.d-logo{font-size:20px;margin:0 10px}
-.d-sep{width:1px;height:24px;background:var(--border);margin:0 6px}
-.d-btn{padding:10px 26px;border-radius:100px;color:var(--muted);font-size:13px;font-weight:500;cursor:pointer;transition:.3s}
-.d-btn:hover{color:#fff;background:rgba(255,255,255,.05)}
-.d-btn.active{color:#000;background:#fff;font-weight:600;box-shadow:0 4px 12px rgba(255,255,255,.2)}
-.last{background:var(--glass);backdrop-filter:blur(30px);border:1px solid var(--border);border-radius:100px;height:60px;padding:6px 18px 6px 6px;display:none;align-items:center;gap:12px;cursor:pointer;transition:.3s;white-space:nowrap}
-.last:hover{background:var(--glass-hover)}
-.last .dot{width:48px;height:48px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:24px}
-.last small{display:block;color:var(--muted);font-size:10px;text-transform:uppercase;letter-spacing:1px}
-.last strong{font-size:13px}
 #player{position:fixed;inset:0;background:#000;z-index:50;display:none;flex-direction:column;animation:fadeIn .3s}
 @keyframes fadeIn{from{opacity:0}to{opacity:1}}
 .p-bar{display:flex;gap:10px;align-items:center;padding:10px 16px;background:rgba(22,22,25,.95);border-bottom:1px solid var(--border)}
@@ -94,7 +82,7 @@ body{margin:0;background:var(--bg);color:var(--text);font-family:'Inter',system-
 input[type=file]{display:none}
 @media (max-width:700px){
   #app{padding:60px 18px 160px}.hero{height:360px}.h-over{padding:28px}.h-title{font-size:38px}.art .em{font-size:140px;right:4%}
-  .d-btn{padding:9px 14px}.grid-v{grid-template-columns:repeat(auto-fill,minmax(140px,1fr));gap:14px}.last{display:none!important}
+  .grid-v{grid-template-columns:repeat(auto-fill,minmax(140px,1fr));gap:14px}
 }
 
 /* ── Sidebar ───────────────────────────────────────────────── */
@@ -135,17 +123,17 @@ input[type=file]{display:none}
     <div class="sb-brand"><div class="sb-icon">🎮</div><span>Launcher</span></div>
   </div>
   <div class="sb-nav">
-    <div class="sb-item active" onclick="navTo('home');closeSb()">
+    <div class="sb-item active" data-t="home" onclick="navTo('home');closeSb()">
       <svg viewBox="0 0 24 24"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg>Home
     </div>
-    <div class="sb-item" onclick="navTo('lib');closeSb()">
+    <div class="sb-item" data-t="lib" onclick="navTo('lib');closeSb()">
       <svg viewBox="0 0 24 24"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg>Library
     </div>
-    <div class="sb-item" onclick="navTo('swf');closeSb()">
+    <div class="sb-item" data-t="swf" onclick="navTo('swf');closeSb()">
       <svg viewBox="0 0 24 24"><polygon points="5 3 19 12 5 21 5 3"/></svg>Flash
     </div>
     <div class="sb-sep"></div>
-    <div class="sb-item" onclick="navTo('set');closeSb()">
+    <div class="sb-item" data-t="set" onclick="navTo('set');closeSb()">
       <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>Settings
     </div>
     <div class="sb-item" onclick="closeSb()">
@@ -207,16 +195,6 @@ input[type=file]{display:none}
   </div></div>
 </div>
 
-<div class="dock-wrap">
-  <div class="dock">
-    <div class="d-logo">🎮</div><div class="d-sep"></div>
-    <div class="d-btn active" data-t="home">Home</div>
-    <div class="d-btn" data-t="lib">Library</div>
-    <div class="d-btn" data-t="swf">Flash</div>
-    <div class="d-btn" data-t="set">Settings</div>
-  </div>
-  <div class="last" id="last"><div class="dot" id="last-dot"></div><div><small>Last Played</small><strong id="last-nm"></strong></div></div>
-</div>
 
 <div id="player">
   <div class="p-bar"><span class="t" id="p-title"></span>
@@ -294,12 +272,13 @@ function renderLib(){
 }
 document.getElementById('q').oninput=renderLib;
 
-var btns=document.querySelectorAll('.d-btn');
-btns.forEach(function(b){b.onclick=function(){
-  btns.forEach(function(x){x.classList.toggle('active',x===b)});
-  document.querySelectorAll('.tab').forEach(function(t){t.classList.toggle('active',t.id==='t-'+b.dataset.t)});
-  document.getElementById('app').scrollTop=0; if(b.dataset.t==='lib') document.getElementById('q').focus();
-}});
+function navTo(t){
+  document.querySelectorAll('.tab').forEach(function(tab){tab.classList.toggle('active',tab.id==='t-'+t)});
+  document.querySelectorAll('.sb-item').forEach(function(i){i.classList.toggle('active',i.dataset.t===t)});
+  document.getElementById('app').scrollTop=0;
+  if(t==='lib') document.getElementById('q').focus();
+}
+document.querySelectorAll('.sb-item[data-t]').forEach(function(i){i.onclick=function(){navTo(i.dataset.t);closeSb();}});
 
 document.querySelectorAll('.sw').forEach(function(s){
   s.classList.toggle('on',!!S[s.dataset.k]);
