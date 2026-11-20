@@ -96,9 +96,77 @@ input[type=file]{display:none}
   #app{padding:60px 18px 160px}.hero{height:360px}.h-over{padding:28px}.h-title{font-size:38px}.art .em{font-size:140px;right:4%}
   .d-btn{padding:9px 14px}.grid-v{grid-template-columns:repeat(auto-fill,minmax(140px,1fr));gap:14px}.last{display:none!important}
 }
+
+/* ── Sidebar ───────────────────────────────────────────────── */
+#sb-overlay{position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:40;opacity:0;pointer-events:none;transition:.3s}
+#sb-overlay.open{opacity:1;pointer-events:all}
+#sidebar{position:fixed;top:0;left:0;bottom:0;width:280px;background:#111114;z-index:41;
+  display:flex;flex-direction:column;transform:translateX(-100%);transition:transform .32s cubic-bezier(.2,.8,.2,1)}
+#sidebar.open{transform:translateX(0)}
+.sb-top{padding:28px 24px 20px;border-bottom:1px solid var(--border)}
+.sb-brand{display:flex;align-items:center;gap:14px;font-size:18px;font-weight:700}
+.sb-icon{width:42px;height:42px;background:#fff;border-radius:10px;display:flex;align-items:center;justify-content:center;font-size:22px;color:#000}
+.sb-nav{flex:1;padding:14px 0;overflow-y:auto}
+.sb-item{display:flex;align-items:center;gap:14px;padding:14px 24px;cursor:pointer;transition:.2s;color:var(--text);font-size:15px;font-weight:500}
+.sb-item:hover{background:rgba(255,255,255,.06)}
+.sb-item svg{width:22px;height:22px;stroke:currentColor;fill:none;stroke-width:1.8;flex-shrink:0;color:var(--muted)}
+.sb-item.active svg,.sb-item.active{color:#fff}
+.sb-sep{height:1px;background:var(--border);margin:8px 24px}
+.sb-label{font-size:11px;font-weight:700;letter-spacing:1.5px;text-transform:uppercase;color:var(--muted);padding:14px 24px 6px}
+.sb-history{padding:0 24px 12px;flex-shrink:0}
+.sb-hist-item{font-size:13px;color:#aaa;padding:5px 0;border-bottom:1px solid var(--border);display:flex;justify-content:space-between}
+.sb-hist-item:last-child{border:0}
+.sb-footer{padding:18px 24px;border-top:1px solid var(--border);font-size:12px;color:var(--muted)}
+.sb-footer strong{display:block;font-size:20px;font-weight:700;color:#fff;margin:2px 0 10px}
+.sb-mute{display:flex;align-items:center;gap:8px;cursor:pointer;color:var(--muted);font-size:13px;font-weight:500;padding:8px 0}
+.sb-mute:hover{color:#fff}
+.sb-mute svg{width:18px;height:18px;stroke:currentColor;fill:none;stroke-width:1.8}
+#sb-menu-btn{position:fixed;top:14px;left:18px;z-index:7;background:none;border:0;cursor:pointer;padding:6px;color:#fff;line-height:0}
+#sb-menu-btn svg{width:22px;height:22px;stroke:currentColor;stroke-width:2;fill:none}
 </style>
 </head>
 <body>
+
+<!-- Sidebar overlay -->
+<div id="sb-overlay" onclick="closeSb()"></div>
+<!-- Sidebar -->
+<div id="sidebar">
+  <div class="sb-top">
+    <div class="sb-brand"><div class="sb-icon">🎮</div><span>Launcher</span></div>
+  </div>
+  <div class="sb-nav">
+    <div class="sb-item active" onclick="navTo('home');closeSb()">
+      <svg viewBox="0 0 24 24"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg>Home
+    </div>
+    <div class="sb-item" onclick="navTo('lib');closeSb()">
+      <svg viewBox="0 0 24 24"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg>Library
+    </div>
+    <div class="sb-item" onclick="navTo('swf');closeSb()">
+      <svg viewBox="0 0 24 24"><polygon points="5 3 19 12 5 21 5 3"/></svg>Flash
+    </div>
+    <div class="sb-sep"></div>
+    <div class="sb-item" onclick="navTo('set');closeSb()">
+      <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>Settings
+    </div>
+    <div class="sb-item" onclick="closeSb()">
+      <svg viewBox="0 0 24 24"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>Account
+    </div>
+  </div>
+  <div class="sb-label">Played History</div>
+  <div class="sb-history" id="sb-hist"></div>
+  <div class="sb-footer">
+    <div>Total Played Time</div>
+    <strong id="sb-time">0m</strong>
+    <div class="sb-mute" id="sb-mute-btn">
+      <svg viewBox="0 0 24 24" id="sb-mute-icon"><polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"/><path d="M19.07 4.93a10 10 0 0 1 0 14.14M15.54 8.46a5 5 0 0 1 0 7.07" id="sb-vol-lines"/></svg>
+      <span id="sb-mute-label">Mute Music</span>
+    </div>
+  </div>
+</div>
+<!-- Hamburger button -->
+<button id="sb-menu-btn" onclick="openSb()" aria-label="Menu">
+  <svg viewBox="0 0 24 24"><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="18" x2="21" y2="18"/></svg>
+</button>
 <div id="boot"><div class="fig-title">Launcher</div><div class="fig-line"></div></div>
 <div id="amb"></div>
 <div class="notch-wrap"><div class="top-notch"><span>🎮 Launcher</span><i id="clock"></i></div></div>
@@ -160,217 +228,17 @@ input[type=file]{display:none}
 /* ===== Your games: add new ones here ===== */
 var GAMES = [
   {n:"Plants vs Zombies DS", dir:"Plants vs Zombies DS", em:"🌻", c:["#3c8d2f","#0d2a09"], tag:"Strategy",
-   d:"Plant your defenses, collect sun and hold the lawn against wave after wave.",
-   svg:`<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 400 280" preserveAspectRatio="xMidYMid slice" style="position:absolute;inset:0;width:100%;height:100%">
-  <defs>
-    <linearGradient id="pvzSky" x1="0" y1="0" x2="0" y2="1">
-      <stop offset="0%" stop-color="#1a4a0a"/>
-      <stop offset="100%" stop-color="#3c8d2f"/>
-    </linearGradient>
-  </defs>
-  <rect width="400" height="280" fill="url(#pvzSky)"/>
-  <!-- Ground -->
-  <rect x="0" y="200" width="400" height="80" fill="#1e5c0a"/>
-  <rect x="0" y="200" width="400" height="12" fill="#2a7a10"/>
-  <!-- Lane lines -->
-  <line x1="0" y1="220" x2="400" y2="220" stroke="#1a4a08" stroke-width="1" opacity="0.5"/>
-  <line x1="0" y1="240" x2="400" y2="240" stroke="#1a4a08" stroke-width="1" opacity="0.5"/>
-  <!-- Sun orb -->
-  <circle cx="320" cy="55" r="38" fill="#f5c518" opacity="0.9"/>
-  <circle cx="320" cy="55" r="30" fill="#ffd700"/>
-  <!-- Sunflower plant -->
-  <rect x="68" y="150" width="8" height="55" fill="#2d8c0a" rx="4"/>
-  <circle cx="72" cy="145" r="22" fill="#f5c518"/>
-  <circle cx="72" cy="145" r="14" fill="#c47c00"/>
-  <circle cx="72" cy="145" r="8" fill="#7a4800"/>
-  <!-- Pea shooter plant -->
-  <rect x="128" y="160" width="8" height="45" fill="#2d8c0a" rx="4"/>
-  <circle cx="132" cy="155" r="16" fill="#3cb83c"/>
-  <ellipse cx="148" cy="155" rx="10" ry="6" fill="#2d8c0a"/>
-  <circle cx="158" cy="155" r="4" fill="#1a5c0a"/>
-  <!-- Wall-nut -->
-  <circle cx="185" cy="170" r="20" fill="#c8a060"/>
-  <ellipse cx="185" cy="170" rx="20" ry="20" fill="#d4aa70"/>
-  <path d="M 175 165 Q 185 155 195 165 Q 185 175 175 165Z" fill="#b88c50"/>
-  <!-- Zombie silhouette right -->
-  <rect x="310" y="155" width="18" height="50" fill="#5a7a40" rx="3"/>
-  <circle cx="319" cy="148" r="14" fill="#6a8a50"/>
-  <rect x="328" y="168" width="20" height="6" fill="#5a7a40" rx="3"/>
-  <!-- Zombie 2 -->
-  <rect x="355" y="165" width="14" height="40" fill="#4a6a30" rx="3"/>
-  <circle cx="362" cy="158" r="11" fill="#5a7a40"/>
-  <!-- Title text -->
-  <text x="200" y="105" text-anchor="middle" font-family="'Arial Black',sans-serif" font-size="32" font-weight="900" fill="#7fff00" stroke="#1a4a00" stroke-width="3" paint-order="stroke">PLANTS</text>
-  <text x="200" y="132" text-anchor="middle" font-family="'Arial Black',sans-serif" font-size="16" font-weight="900" fill="#ffffff" stroke="#000" stroke-width="2" paint-order="stroke">vs</text>
-  <text x="200" y="158" text-anchor="middle" font-family="'Arial Black',sans-serif" font-size="30" font-weight="900" fill="#ff4444" stroke="#330000" stroke-width="3" paint-order="stroke">ZOMBIES</text>
-  <text x="200" y="175" text-anchor="middle" font-family="sans-serif" font-size="11" fill="#aaffaa" letter-spacing="3">NINTENDO DS</text>
-</svg>`},
+   img:"art/pvz.png",
+   d:"Plant your defenses, collect sun and hold the lawn against wave after wave."},
   {n:"Sonic", dir:"Sonic", em:"💨", c:["#2f62d9","#0a1640"], tag:"Platformer", beta:true,
-   d:"High-speed platforming across three acts of rolling hills.",
-   svg:`<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 400 280" preserveAspectRatio="xMidYMid slice" style="position:absolute;inset:0;width:100%;height:100%">
-  <defs>
-    <linearGradient id="sonSky" x1="0" y1="0" x2="0" y2="1">
-      <stop offset="0%" stop-color="#0a1640"/>
-      <stop offset="60%" stop-color="#1a3a9a"/>
-      <stop offset="100%" stop-color="#2f62d9"/>
-    </linearGradient>
-    <linearGradient id="sonGround" x1="0" y1="0" x2="0" y2="1">
-      <stop offset="0%" stop-color="#2a8a1a"/>
-      <stop offset="100%" stop-color="#1a5a0a"/>
-    </linearGradient>
-  </defs>
-  <rect width="400" height="280" fill="url(#sonSky)"/>
-  <!-- Stars -->
-  <circle cx="30" cy="30" r="2" fill="white" opacity="0.8"/>
-  <circle cx="80" cy="15" r="1.5" fill="white" opacity="0.6"/>
-  <circle cx="150" cy="40" r="2" fill="white" opacity="0.7"/>
-  <circle cx="350" cy="20" r="1.5" fill="white" opacity="0.8"/>
-  <circle cx="380" cy="50" r="1" fill="white" opacity="0.5"/>
-  <!-- Rolling hills -->
-  <path d="M0 200 Q60 160 120 185 Q180 210 240 175 Q300 140 360 170 L400 160 L400 280 L0 280Z" fill="url(#sonGround)"/>
-  <path d="M0 215 Q50 195 100 205 Q160 215 220 195 Q280 175 340 190 L400 185 L400 280 L0 280Z" fill="#1e6a10"/>
-  <!-- Speed lines -->
-  <line x1="10" y1="130" x2="120" y2="130" stroke="#6090ff" stroke-width="3" opacity="0.5"/>
-  <line x1="10" y1="142" x2="100" y2="142" stroke="#6090ff" stroke-width="2" opacity="0.4"/>
-  <line x1="10" y1="152" x2="80" y2="152" stroke="#6090ff" stroke-width="1.5" opacity="0.3"/>
-  <!-- Sonic silhouette (blue hedgehog) -->
-  <!-- Body -->
-  <ellipse cx="250" cy="170" rx="30" ry="24" fill="#2060d0"/>
-  <!-- Head -->
-  <circle cx="275" cy="155" r="26" fill="#2060d0"/>
-  <!-- Spines -->
-  <path d="M270 135 L260 110 L280 128Z" fill="#1040a0"/>
-  <path d="M282 132 L280 105 L295 125Z" fill="#1040a0"/>
-  <path d="M290 136 L295 110 L306 130Z" fill="#1040a0"/>
-  <!-- Face area -->
-  <ellipse cx="282" cy="160" rx="14" ry="12" fill="#f5c5a0"/>
-  <!-- Eye -->
-  <circle cx="288" cy="152" r="8" fill="white"/>
-  <circle cx="291" cy="152" r="5" fill="#1a1a4a"/>
-  <circle cx="292" cy="150" r="2" fill="white"/>
-  <!-- Nose -->
-  <ellipse cx="295" cy="160" rx="4" ry="3" fill="#cc4444"/>
-  <!-- Legs running -->
-  <ellipse cx="238" cy="192" rx="10" ry="6" fill="#f5c5a0" transform="rotate(-20,238,192)"/>
-  <ellipse cx="258" cy="196" rx="10" ry="6" fill="#f5c5a0" transform="rotate(15,258,196)"/>
-  <!-- Red shoes -->
-  <ellipse cx="232" cy="196" rx="12" ry="7" fill="#cc2222"/>
-  <ellipse cx="252" cy="200" rx="12" ry="7" fill="#cc2222"/>
-  <!-- White glove hand -->
-  <circle cx="232" cy="162" r="10" fill="white"/>
-  <!-- Ring -->
-  <circle cx="310" cy="175" r="10" fill="none" stroke="#ffd700" stroke-width="4"/>
-  <circle cx="345" cy="165" r="10" fill="none" stroke="#ffd700" stroke-width="4"/>
-  <!-- Title -->
-  <text x="130" y="80" text-anchor="middle" font-family="'Arial Black',sans-serif" font-size="38" font-weight="900" fill="#4488ff" stroke="#001060" stroke-width="4" paint-order="stroke">SONIC</text>
-  <text x="130" y="108" text-anchor="middle" font-family="'Arial Black',sans-serif" font-size="14" font-weight="700" fill="#ffffff" stroke="#000840" stroke-width="2" paint-order="stroke">THE HEDGEHOG</text>
-</svg>`},
+   img:"art/sonic.png",
+   d:"High-speed platforming across three acts of rolling hills."},
   {n:"Flappy Birds", dir:"Flappy Birds", em:"🐤", c:["#4ec0ca","#0f4a50"], tag:"Arcade",
-   d:"Tap to flap through the pipes. How far can you get?",
-   svg:`<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 400 280" preserveAspectRatio="xMidYMid slice" style="position:absolute;inset:0;width:100%;height:100%">
-  <defs>
-    <linearGradient id="flpSky" x1="0" y1="0" x2="0" y2="1">
-      <stop offset="0%" stop-color="#48c0e8"/>
-      <stop offset="100%" stop-color="#b8e8f8"/>
-    </linearGradient>
-  </defs>
-  <rect width="400" height="280" fill="url(#flpSky)"/>
-  <!-- Clouds -->
-  <ellipse cx="80" cy="50" rx="45" ry="22" fill="white" opacity="0.9"/>
-  <ellipse cx="55" cy="55" rx="28" ry="18" fill="white" opacity="0.9"/>
-  <ellipse cx="108" cy="55" rx="28" ry="18" fill="white" opacity="0.9"/>
-  <ellipse cx="310" cy="40" rx="40" ry="18" fill="white" opacity="0.8"/>
-  <ellipse cx="290" cy="44" rx="24" ry="14" fill="white" opacity="0.8"/>
-  <ellipse cx="333" cy="44" rx="24" ry="14" fill="white" opacity="0.8"/>
-  <!-- Ground -->
-  <rect x="0" y="245" width="400" height="35" fill="#c8a830"/>
-  <rect x="0" y="245" width="400" height="10" fill="#e8c840"/>
-  <!-- Pipe top -->
-  <rect x="280" y="0" width="55" height="130" fill="#3a9a30"/>
-  <rect x="275" y="118" width="65" height="20" fill="#2a7a20" rx="4"/>
-  <rect x="283" y="2" width="4" height="128" fill="#4aaa40" opacity="0.5"/>
-  <!-- Pipe bottom -->
-  <rect x="280" y="195" width="55" height="85" fill="#3a9a30"/>
-  <rect x="275" y="193" width="65" height="20" fill="#2a7a20" rx="4"/>
-  <rect x="283" y="197" width="4" height="80" fill="#4aaa40" opacity="0.5"/>
-  <!-- Bird body -->
-  <ellipse cx="160" cy="148" rx="34" ry="28" fill="#f5c518"/>
-  <!-- Wing -->
-  <ellipse cx="148" cy="158" rx="18" ry="10" fill="#e0a010" transform="rotate(-20,148,158)"/>
-  <!-- Eye -->
-  <circle cx="174" cy="140" r="12" fill="white"/>
-  <circle cx="177" cy="140" r="7" fill="#1a1a1a"/>
-  <circle cx="179" cy="138" r="2.5" fill="white"/>
-  <!-- Beak -->
-  <path d="M182 148 L200 143 L200 153Z" fill="#f07020"/>
-  <line x1="182" y1="148" x2="200" y2="148" stroke="#c05010" stroke-width="1.5"/>
-  <!-- Cheek -->
-  <circle cx="170" cy="150" r="8" fill="#ff9080" opacity="0.6"/>
-  <!-- Score display style score -->
-  <rect x="160" y="20" width="80" height="38" fill="rgba(0,0,0,0.3)" rx="8"/>
-  <text x="200" y="47" text-anchor="middle" font-family="'Arial Black',sans-serif" font-size="26" font-weight="900" fill="white" stroke="#333" stroke-width="1" paint-order="stroke">14</text>
-  <!-- Title -->
-  <text x="200" y="230" text-anchor="middle" font-family="'Arial Black',sans-serif" font-size="30" font-weight="900" fill="#f5c518" stroke="#553300" stroke-width="3" paint-order="stroke">FLAPPY</text>
-  <text x="200" y="255" text-anchor="middle" font-family="'Arial Black',sans-serif" font-size="22" font-weight="900" fill="#ff8822" stroke="#553300" stroke-width="2" paint-order="stroke">BIRDS</text>
-</svg>`},
+   img:"art/flappy.png",
+   d:"Tap to flap through the pipes. How far can you get?"},
   {n:"Minecraft Pocket Edition", dir:"Minecraft Pocket Edition", em:"⛏️", c:["#7a5a3a","#1e150c"], tag:"Sandbox",
-   d:"Mine, build and survive in a blocky world, or go wild in Creative.",
-   svg:`<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 400 280" preserveAspectRatio="xMidYMid slice" style="position:absolute;inset:0;width:100%;height:100%">
-  <defs>
-    <linearGradient id="mcSky" x1="0" y1="0" x2="0" y2="1">
-      <stop offset="0%" stop-color="#87ceeb"/>
-      <stop offset="100%" stop-color="#b0e0f8"/>
-    </linearGradient>
-  </defs>
-  <rect width="400" height="280" fill="url(#mcSky)"/>
-  <!-- Sun -->
-  <rect x="330" y="20" width="40" height="40" fill="#ffe040" rx="2"/>
-  <!-- Clouds pixel-style -->
-  <rect x="40" y="30" width="80" height="20" fill="white" opacity="0.9"/>
-  <rect x="30" y="38" width="100" height="20" fill="white" opacity="0.9"/>
-  <!-- Ground blocks -->
-  <rect x="0" y="210" width="400" height="70" fill="#5a8a30"/>
-  <!-- Grid lines on ground -->
-  <line x1="40" y1="210" x2="40" y2="280" stroke="#4a7a20" stroke-width="1"/>
-  <line x1="80" y1="210" x2="80" y2="280" stroke="#4a7a20" stroke-width="1"/>
-  <line x1="120" y1="210" x2="120" y2="280" stroke="#4a7a20" stroke-width="1"/>
-  <line x1="160" y1="210" x2="160" y2="280" stroke="#4a7a20" stroke-width="1"/>
-  <line x1="200" y1="210" x2="200" y2="280" stroke="#4a7a20" stroke-width="1"/>
-  <line x1="240" y1="210" x2="240" y2="280" stroke="#4a7a20" stroke-width="1"/>
-  <line x1="280" y1="210" x2="280" y2="280" stroke="#4a7a20" stroke-width="1"/>
-  <line x1="320" y1="210" x2="320" y2="280" stroke="#4a7a20" stroke-width="1"/>
-  <line x1="360" y1="210" x2="360" y2="280" stroke="#4a7a20" stroke-width="1"/>
-  <line x1="0" y1="250" x2="400" y2="250" stroke="#4a7a20" stroke-width="1"/>
-  <!-- Dirt below -->
-  <rect x="0" y="250" width="400" height="30" fill="#8B5E3C"/>
-  <!-- Stone blocks -->
-  <rect x="0" y="170" width="40" height="40" fill="#888888"/>
-  <rect x="40" y="170" width="40" height="40" fill="#8a8a8a"/>
-  <rect x="80" y="170" width="40" height="40" fill="#868686"/>
-  <rect x="0" y="210" width="40" height="40" fill="#5a8a30"/>
-  <!-- Block outlines -->
-  <rect x="0" y="170" width="40" height="40" fill="none" stroke="#666" stroke-width="1"/>
-  <rect x="40" y="170" width="40" height="40" fill="none" stroke="#666" stroke-width="1"/>
-  <rect x="80" y="170" width="40" height="40" fill="none" stroke="#666" stroke-width="1"/>
-  <!-- Wood log block -->
-  <rect x="320" y="170" width="40" height="40" fill="#8B6914"/>
-  <rect x="320" y="170" width="40" height="40" fill="none" stroke="#6a4a0a" stroke-width="1"/>
-  <circle cx="340" cy="190" r="10" fill="#6a4a0a" opacity="0.4"/>
-  <!-- Creeper face (simple pixel face) -->
-  <rect x="175" y="80" width="60" height="60" fill="#3a9a3a"/>
-  <rect x="175" y="80" width="60" height="60" fill="none" stroke="#2a7a2a" stroke-width="2"/>
-  <!-- Creeper eyes -->
-  <rect x="186" y="92" width="12" height="14" fill="#1a1a1a"/>
-  <rect x="212" y="92" width="12" height="14" fill="#1a1a1a"/>
-  <!-- Creeper mouth -->
-  <rect x="192" y="112" width="6" height="8" fill="#1a1a1a"/>
-  <rect x="204" y="112" width="6" height="8" fill="#1a1a1a"/>
-  <rect x="186" y="118" width="12" height="6" fill="#1a1a1a"/>
-  <rect x="210" y="118" width="12" height="6" fill="#1a1a1a"/>
-  <!-- Title -->
-  <text x="200" y="52" text-anchor="middle" font-family="'Courier New',monospace" font-size="30" font-weight="900" fill="#ffffff" stroke="#1a1a1a" stroke-width="4" paint-order="stroke">Minecraft</text>
-  <text x="200" y="74" text-anchor="middle" font-family="'Courier New',monospace" font-size="14" font-weight="700" fill="#c8c8c8" stroke="#1a1a1a" stroke-width="2" paint-order="stroke">POCKET EDITION</text>
-</svg>`}
+   img:"art/minecraft.png",
+   d:"Mine, build and survive in a blocky world, or go wild in Creative."}
 ];
 
 function ld(k,d){try{var v=localStorage.getItem('gl_'+k);return v==null?d:JSON.parse(v)}catch(e){return d}}
@@ -472,6 +340,28 @@ file.onchange=function(){
 };
 
 renderHero(); renderRows(); renderLib();
+
+/* ── Sidebar JS ─────────────────────────────────────────────── */
+function openSb(){document.getElementById('sidebar').classList.add('open');document.getElementById('sb-overlay').classList.add('open');}
+function closeSb(){document.getElementById('sidebar').classList.remove('open');document.getElementById('sb-overlay').classList.remove('open');}
+
+var totalMs=ld('total_ms',0), sessionStart=Date.now(), muted=ld('muted',false);
+
+function fmtTime(ms){var m=Math.floor(ms/60000),h=Math.floor(m/60);return h?h+'h '+(m%60)+'m':m+'m';}
+function sbRefresh(){
+  var hist=document.getElementById('sb-hist');
+  var r=ld('recent',[]);
+  if(!r.length){hist.innerHTML='<div style="color:var(--muted);font-size:13px;padding:4px 0">No History</div>';}
+  else{hist.innerHTML=r.slice(0,5).map(function(n){return '<div class="sb-hist-item"><span>'+n+'</span></div>';}).join('');}
+  document.getElementById('sb-time').textContent=fmtTime(totalMs+(Date.now()-sessionStart));
+  document.getElementById('sb-mute-label').textContent=muted?'Unmute Music':'Mute Music';
+  var lines=document.getElementById('sb-vol-lines');
+  if(lines) lines.style.display=muted?'none':'';
+}
+document.getElementById('sb-mute-btn').onclick=function(){muted=!muted;sv('muted',muted);sbRefresh();};
+window.addEventListener('beforeunload',function(){sv('total_ms',totalMs+(Date.now()-sessionStart));});
+setInterval(sbRefresh,60000);
+sbRefresh();
 </script>
 </body>
 </html>
